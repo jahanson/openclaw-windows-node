@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using OpenClaw.Connection.NativeGateway;
 using OpenClaw.Shared;
+using OpenClaw.TestSupport;
 
 namespace OpenClaw.Connection.Tests;
 
@@ -38,6 +39,11 @@ public sealed class IsolatedGatewayRuntimeTests : IAsyncDisposable
     private Exception? _stopFailure;
     private string _otherState = "running";
     private bool _stopKeepsRunning;
+    private readonly ManualTimeProvider _clock = new();
+    private string _startState = "running";
+    private TimeSpan _startDuration;
+    private Action? _beforeStatus;
+    private bool _failStart;
 
     public IsolatedGatewayRuntimeTests()
     {
@@ -50,10 +56,16 @@ public sealed class IsolatedGatewayRuntimeTests : IAsyncDisposable
             int processId = other ? 4567 : ProcessId;
             if (args.SequenceEqual(["gateway-service", "status", "--json"]) && _statusFailure is not null)
                 return Task.FromException<NativeGatewayCommandResult>(_statusFailure);
+            if (args.SequenceEqual(["gateway-service", "status", "--json"]))
+                _beforeStatus?.Invoke();
             if (args.SequenceEqual(["gateway-service", "start", "--json"]))
             {
+                _clock.Advance(_startDuration);
+                if (_failStart)
+                    return Task.FromResult(new NativeGatewayCommandResult(1,
+                        """{"ok":false,"schemaVersion":1,"command":"gateway-service start","integration":{"kind":"isolated-session","version":1},"error":{"code":"cli_error","message":"The gateway process started but is not listening yet."}}"""));
                 if (other) _otherState = "running";
-                else _state = "running";
+                else _state = _startState;
                 if (_listenOnStart)
                     _listeners = [.. _listeners.Where(l => l.Port != port),
                         new(IPAddress.Loopback, port, processId, "fixture", null)];
@@ -97,7 +109,128 @@ public sealed class IsolatedGatewayRuntimeTests : IAsyncDisposable
         _runtime = new IsolatedGatewayRuntime(new Resolver(_package, FixturePackage(OtherFamily)), client,
             () => new WindowsTcpListenerSnapshotResult(_listeners, _snapshotComplete, true),
             () => new Dictionary<int, ulong> { [ProcessId] = _hostSequence, [4567] = 88 },
-            _ => true);
+            _ => true, timeProvider: _clock);
+    }
+
+    [Theory]
+    [InlineData("starting")]
+    [InlineData("unhealthy")]
+    public async Task AcknowledgedOwnedStartWaitsPastNinetySecondsForFreshListenerProof(string pending)
+    {
+        _state = "stopped";
+        _listeners = [];
+        _startState = pending;
+        _startDuration = TimeSpan.FromSeconds(90);
+        var start = _runtime.EnsureRunningAsync(_record, default);
+        Assert.False(start.IsCompleted);
+        Assert.Equal(GatewayEndpointProvenanceKind.UnknownListener, _runtime.Inspect(_record).Kind);
+
+        _beforeStatus = () =>
+        {
+            _state = "running";
+            _listeners = [new(IPAddress.Loopback, Port, ProcessId, "fixture", null)];
+        };
+        _clock.Advance(TimeSpan.FromSeconds(46));
+        await start.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(TimeSpan.FromSeconds(136).Ticks, _clock.GetTimestamp());
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service start --json"));
+        Assert.DoesNotContain("gateway-service stop --json", _calls);
+        Assert.Equal(GatewayEndpointProvenanceKind.ExpectedManagedGateway, _runtime.Inspect(_record).Kind);
+        _beforeStatus = null;
+    }
+
+    [Fact]
+    public async Task PendingStartDeadlineIncludesStartCommandAndRollsBackExactlyOnce()
+    {
+        _state = "stopped";
+        _listeners = [];
+        _startState = "starting";
+        _startDuration = TimeSpan.FromSeconds(90);
+        var start = _runtime.EnsureRunningAsync(_record, default);
+        _clock.Advance(TimeSpan.FromSeconds(90));
+
+        await Assert.ThrowsAsync<TimeoutException>(() => start.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service stop --json"));
+        Assert.Equal(GatewayEndpointProvenanceKind.UnknownListener, _runtime.Inspect(_record).Kind);
+    }
+
+    [Fact]
+    public async Task CancellingPendingOwnedStartRollsBackAndReleasesGate()
+    {
+        _state = "stopped";
+        _listeners = [];
+        _startState = "starting";
+        using var cancellation = new CancellationTokenSource();
+        var start = _runtime.EnsureRunningAsync(_record, cancellation.Token);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => start);
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service stop --json"));
+
+        _startState = "running";
+        _listenOnStart = true;
+        await _runtime.EnsureRunningAsync(_record, default);
+        Assert.Equal(GatewayEndpointProvenanceKind.ExpectedManagedGateway, _runtime.Inspect(_record).Kind);
+    }
+
+    [Theory]
+    [InlineData("stopped")]
+    [InlineData("not-started")]
+    [InlineData("unknown")]
+    public async Task OwnedStartTerminalStateDoesNotRetryStart(string terminal)
+    {
+        _state = "stopped";
+        _listeners = [];
+        _startState = terminal;
+        await Assert.ThrowsAsync<NativeGatewayContractException>(() => _runtime.EnsureRunningAsync(_record, default));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service start --json"));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service stop --json"));
+    }
+
+    [Theory]
+    [InlineData("starting")]
+    [InlineData("unhealthy")]
+    [InlineData("unknown")]
+    public async Task PreexistingUnreadyServiceIsNeverAdoptedOrStopped(string state)
+    {
+        _state = state;
+        _listeners = [];
+        await Assert.ThrowsAsync<NativeGatewayContractException>(() => _runtime.EnsureRunningAsync(_record, default));
+        Assert.DoesNotContain("gateway-service start --json", _calls);
+        Assert.DoesNotContain("gateway-service stop --json", _calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PendingStartRejectsUnattributedListenerOrReusedProcessSequence(bool claimsRunning)
+    {
+        _state = "stopped";
+        _listeners = [];
+        _startState = "starting";
+        var start = _runtime.EnsureRunningAsync(_record, default);
+        _beforeStatus = () =>
+        {
+            _state = claimsRunning ? "running" : "starting";
+            _listeners = [new(IPAddress.Loopback, Port, ProcessId, "fixture", null)];
+            _hostSequence = 99;
+        };
+        _clock.Advance(TimeSpan.FromSeconds(2));
+        await Assert.ThrowsAsync<NativeGatewayListenerException>(() => start.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service stop --json"));
+        Assert.Equal(GatewayEndpointProvenanceKind.UnknownListener, _runtime.Inspect(_record).Kind);
+        _beforeStatus = null;
+    }
+
+    [Fact]
+    public async Task InstalledPackageAmbiguousStartingFailureIsNotTreatedAsAcknowledgement()
+    {
+        _state = "stopped";
+        _listeners = [];
+        _failStart = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _runtime.EnsureRunningAsync(_record, default));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service status --json"));
+        Assert.Equal(1, _calls.Count(call => call == "gateway-service stop --json"));
     }
 
     [Fact]

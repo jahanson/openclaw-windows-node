@@ -8,8 +8,13 @@ public sealed class SetupNativeCompletionCoordinator(
     Func<CancellationToken, Task> drain,
     Func<GatewayAiSetupCompletion, CancellationToken, Task<SetupVerifiedNativeRoute>> verify,
     Func<GatewayAiSetupCompletion, CancellationToken, Task> finalize,
-    Func<SetupNativeCompletion, CancellationToken, Task> publish) : IDisposable
+    Func<SetupNativeCompletion, CancellationToken, Task> publish,
+    TimeProvider? timeProvider = null) : IDisposable
 {
+    internal static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(30);
+    // Read-only proof may include a 210-second native reconnect, the existing
+    // 120-second model RPC and fresh package/identity checks. It never includes mutations.
+    internal static readonly TimeSpan VerificationTimeout = TimeSpan.FromMinutes(6);
     private readonly CancellationTokenSource _lifetime = new();
     private int _busy;
     private bool _disposed;
@@ -34,13 +39,12 @@ public sealed class SetupNativeCompletionCoordinator(
         var lifetime = _lifetime.Token;
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
-            timeout.CancelAfter(TimeSpan.FromSeconds(30));
             Stage = SetupNativeCompletionStage.Verifying;
             StateChanged?.Invoke();
-            await drain(timeout.Token);
-            var current = await verify(Proof, timeout.Token);
-            timeout.Token.ThrowIfCancellationRequested();
+            await ReadOnlyPhaseAsync(async ct => { await drain(ct); return true; },
+                DrainTimeout, "closing the previous AI setup page", lifetime);
+            var current = await ReadOnlyPhaseAsync(ct => verify(Proof, ct),
+                VerificationTimeout, "verifying the selected AI model", lifetime);
             SetupNativeVerification.RequireSame(Proof, current);
             if (!_finalized)
             {
@@ -56,6 +60,23 @@ public sealed class SetupNativeCompletionCoordinator(
             IsCompleted = true;
         }
         finally { Volatile.Write(ref _busy, 0); }
+    }
+
+    private async Task<T> ReadOnlyPhaseAsync<T>(
+        Func<CancellationToken, Task<T>> operation, TimeSpan budget, string phase, CancellationToken lifetime)
+    {
+        using var deadline = new CancellationTokenSource(budget, timeProvider ?? TimeProvider.System);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(lifetime, deadline.Token);
+        try
+        {
+            var result = await operation(linked.Token);
+            linked.Token.ThrowIfCancellationRequested();
+            return result;
+        }
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !lifetime.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Native AI completion timed out while {phase}. Retry when the Gateway is ready.", error);
+        }
     }
 
     public void Dispose()

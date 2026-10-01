@@ -409,11 +409,58 @@ channel focus behavior, but are not separate choices on this screen.
 
 Each explicit choice drains the prior AI page, rechecks the same Gateway,
 endpoint, agent, model and main session through a bounded read-only verification,
-then finalizes Windows choices once. Failures stay on the chooser with retry or
+then finalizes Windows choices once. The prior page drain has its own 30-second
+deadline. Fresh read-only proof has a separate six-minute ceiling, allowing the
+native owner's 210-second reconnect budget, the existing 120-second exact-model
+RPC budget and authority-check overhead. Neither deadline runs across finalization
+or destination publication: those retain caller cancellation and their underlying
+operation budgets, without abandoning or automatically replaying mutations.
+Failures stay on the chooser with retry or
 return-to-AI guidance. **Back to AI setup** is available only inside the error
 message, so changed verification has an actionable recovery without a permanent
 footer escape. Returning invalidates its admission and requires another
 verification. MCP-only/deferred routes do not claim verified AI.
+
+### Native startup and completion deadlines
+
+A reported slow native cold start took about 136 seconds. Companion waits for
+its own successfully acknowledged package start within a three-minute total
+budget, then still requires fresh selected-port and process-sequence ownership
+proof. It never treats an `unhealthy`/`starting` observation as ready, waits for
+an unrelated pre-existing start, or retries the start command while polling.
+The published native connection owner gets 210 seconds for startup plus its
+authenticated handshake before exact-model verification. Page drain, selection
+verification, runtime startup and published-owner handoff are distinct lifetimes.
+
+**Installed package limitation:** package commit
+[`133deeb`](https://github.com/openclaw/openclaw-windows-packaging/tree/133deeb1a5efac2bcbc6564c90c038a999e6e842)
+(MSIX 2026.9.700.0, payload 2026.9.7) cannot safely expose its pending start:
+[`GatewayController`](https://github.com/openclaw/openclaw-windows-packaging/blob/133deeb1a5efac2bcbc6564c90c038a999e6e842/src/OpenClaw.Launcher/Gateway/GatewayController.cs)
+returns `Starting` after its 90-second listener wait;
+[`Program.WriteGatewayStartResult`](https://github.com/openclaw/openclaw-windows-packaging/blob/133deeb1a5efac2bcbc6564c90c038a999e6e842/src/OpenClaw.Launcher/Program.cs)
+maps it to exit 1; and
+[`ClawCtlJson.FromGateway`](https://github.com/openclaw/openclaw-windows-packaging/blob/133deeb1a5efac2bcbc6564c90c038a999e6e842/src/OpenClaw.Launcher/ClawCtlJson.cs)
+omits the Gateway object for that failed start. Only `ok:false` and a generic
+`cli_error` with human text remain. Its subsequent `unhealthy` status supplies no
+pending sandbox/process ownership proof. Companion intentionally rejects that
+ambiguous failure and preserves rollback rather than parsing prose or accepting
+arbitrary failures. The bounded polling change does **not** fix this package's
+90-second failure path.
+
+The packaging contract needs an explicit, versioned pending-start acknowledgement
+with defined exit/`ok` semantics and stable session/launch ownership identity,
+available on subsequent pending status checks and guarded stop operations.
+That must distinguish this launch from another start, exited/replaced processes,
+port changes and inspection failures. No guessed additional protocol fields are
+accepted by Companion here.
+
+A successful setup on payload 2026.9.4 followed by these failures on 2026.9.7 is
+a concrete version difference, not a controlled regression measurement. Package
+launcher timing, payload startup work and Companion's former combined 30-second
+selection deadline are separate contributors. The reported 22.5-second successful
+verification RPC plus authority subprocesses can exceed that former deadline;
+fixture tests reproduce that budget collision, but do not prove the exception
+shown by an installed UI whose original exception was not persisted.
 
 The original verification retains the exact main session and a SHA256 binding
 over the normalized identity directory and the local device ID that signed the

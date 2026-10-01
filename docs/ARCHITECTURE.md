@@ -446,6 +446,16 @@ reload setting intact. Stopping either runtime does not delete its configuration
 
 ### Isolated listener proof and legacy process ownership
 
+After a successful package start acknowledgement, `IsolatedGatewayRuntime`
+allows up to three minutes, including the start command, for its own start to
+become ready. It polls status every two seconds without issuing another start.
+`starting` or `unhealthy` with no listener is only a pending observation, never
+credential authority. Unknown/terminal states, unattributed listeners and failed
+ownership checks fail closed. Cancellation/deadline failure retains the existing
+owned-start rollback rules; pre-existing pending services are not adopted.
+See [native startup contract limitations](ONBOARDING_WIZARD.md#native-startup-and-completion-deadlines)
+for the older package's ambiguous failed-start response, which is not admitted.
+
 `IsolatedGatewayRuntime` accepts a running Gateway only after a fresh
 package-qualified `clawctl gateway-service status --json` attributes its
 listener process IDs, creation times, and OS sequence numbers to the

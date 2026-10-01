@@ -4,6 +4,9 @@ namespace OpenClaw.SetupEngine;
 
 public static class SetupNativeCompletionVerifier
 {
+    // The runtime's three-minute start budget must finish before the normal owner
+    // completes its authenticated handshake. Model verification has its own RPC budget.
+    private static readonly TimeSpan NativeConnectionTimeout = TimeSpan.FromSeconds(210);
     public static async Task<SetupVerifiedNativeRoute> VerifyAsync(
         string dataDir, GatewayAiSetupCompletion expected, CancellationToken ct,
         GatewayConnectionManager? connectionManager = null,
@@ -22,7 +25,7 @@ public static class SetupNativeCompletionVerifier
             if (connectionManager is null)
                 throw new InvalidOperationException("The native Gateway connection owner is unavailable.");
             var transport = await GatewayAiSetupTransport.BorrowNativeAsync(dataDir, connectionManager, native.Id, ct,
-                expected.EndpointBinding, TimeSpan.FromMinutes(2));
+                expected.EndpointBinding, NativeConnectionTimeout);
             SetupNativeVerification.RequireRoute(expected, transport.Route);
             if (waitForModel is not null)
             {
@@ -31,7 +34,7 @@ public static class SetupNativeCompletionVerifier
                 // Model recovery can publish a new port and restart the Gateway.
                 // Never verify on the pre-recovery handshake.
                 transport = await GatewayAiSetupTransport.BorrowNativeAsync(dataDir, connectionManager, native.Id, ct,
-                    expected.EndpointBinding, TimeSpan.FromMinutes(2));
+                    expected.EndpointBinding, NativeConnectionTimeout);
                 SetupNativeVerification.RequireRoute(expected, transport.Route);
             }
             var nativeClient = new GatewayAiSetupClient(transport, expected.ModelRef, expected.Intent);
