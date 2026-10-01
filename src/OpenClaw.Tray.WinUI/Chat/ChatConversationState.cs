@@ -1422,11 +1422,11 @@ internal sealed class ChatConversationState
     }
 
     internal ChatEmptyTerminalTransition? CompleteEmptyChatTerminal(
-        AgentEventInfo terminal,
+        ChatEmptyTerminalMapping terminal,
         ChatProjectionContext context)
     {
-        var threadId = terminal.SessionKey!;
-        var runId = terminal.RunId;
+        var threadId = terminal.Event.SessionKey!;
+        var runId = terminal.Event.RunId;
         lock (_gate)
         {
             var timeline = GetOrCreateTimelineLocked(threadId);
@@ -1441,7 +1441,7 @@ internal sealed class ChatConversationState
             {
                 return null;
             }
-            if (!_reset.TryAcceptOwnedTerminal(threadId, terminal) ||
+            if (!_reset.TryAcceptOwnedTerminal(threadId, terminal.Event) ||
                 _lifecycle.ShouldDropTerminal(
                     threadId,
                     runId,
@@ -1463,14 +1463,9 @@ internal sealed class ChatConversationState
                 timeline,
                 new ChatTurnEndEvent());
 
-            var isError = terminal.Data.TryGetProperty("state", out var state) &&
-                string.Equals(
-                    state.GetString(),
-                    "error",
-                    StringComparison.OrdinalIgnoreCase);
             return new(
                 runId,
-                isError,
+                terminal.IsError,
                 BuildSnapshotLocked(context));
         }
     }

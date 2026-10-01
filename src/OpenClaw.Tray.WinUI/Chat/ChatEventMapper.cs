@@ -12,6 +12,9 @@ internal sealed record ChatTerminalApprovalMapping(
     string ApprovalId,
     string ApprovalSlug,
     string Decision);
+internal sealed record ChatEmptyTerminalMapping(
+    AgentEventInfo Event,
+    bool IsError);
 
 internal sealed record ChatFlattenedToolEvents(
     ChatToolStartEvent Start,
@@ -19,6 +22,33 @@ internal sealed record ChatFlattenedToolEvents(
 
 internal static class ChatEventMapper
 {
+    internal static ChatEmptyTerminalMapping? MapEmptyTerminal(
+        AgentEventInfo evt)
+    {
+        if (string.IsNullOrWhiteSpace(evt.SessionKey) ||
+            string.IsNullOrWhiteSpace(evt.RunId) ||
+            evt.Data.ValueKind != JsonValueKind.Object ||
+            evt.Data.TryGetProperty("message", out _) ||
+            evt.Data.TryGetProperty("text", out _) ||
+            !evt.Data.TryGetProperty("state", out var stateProperty) ||
+            stateProperty.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var state = stateProperty.GetString();
+        var isError = string.Equals(
+            state,
+            "error",
+            StringComparison.OrdinalIgnoreCase);
+        return isError || string.Equals(
+            state,
+            "final",
+            StringComparison.OrdinalIgnoreCase)
+                ? new ChatEmptyTerminalMapping(evt, isError)
+                : null;
+    }
+
     internal static ChatEventMapping Map(AgentEventInfo evt)
     {
         var stream = evt.Stream?.ToLowerInvariant();

@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using OpenClaw.Chat;
 using OpenClaw.Shared;
 #if !OPENCLAW_TRAY_TESTS
@@ -1534,26 +1533,14 @@ public sealed class OpenClawChatDataProvider : IChatDataProvider
 
     private void OnRawChatEventReceived(object? sender, AgentEventInfo evt)
     {
-        if (evt is null || _state.IsDisposed ||
-            string.IsNullOrWhiteSpace(evt.SessionKey) ||
-            string.IsNullOrWhiteSpace(evt.RunId) ||
-            evt.Data.ValueKind != JsonValueKind.Object ||
-            evt.Data.TryGetProperty("message", out _) ||
-            evt.Data.TryGetProperty("text", out _) ||
-            !evt.Data.TryGetProperty("state", out var stateProperty))
-        {
+        if (evt is null || _state.IsDisposed)
             return;
-        }
-
-        var state = stateProperty.GetString();
-        if (!string.Equals(state, "final", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(state, "error", StringComparison.OrdinalIgnoreCase))
-        {
+        var terminal = ChatEventMapper.MapEmptyTerminal(evt);
+        if (terminal is null)
             return;
-        }
 
         var transition = _state.CompleteEmptyChatTerminal(
-            evt,
+            terminal,
             ProjectionContext());
         if (transition is null)
             return;
@@ -1571,7 +1558,7 @@ public sealed class OpenClawChatDataProvider : IChatDataProvider
                 : ChatTurnTelemetryReason.LifecycleEnd);
         _telemetry.CompletePreparedTurn(completion);
         Publish(transition.Snapshot);
-        ScheduleQueuedSendDrain(evt.SessionKey!);
+        ScheduleQueuedSendDrain(terminal.Event.SessionKey!);
     }
 
     private void OnAgentEventReceived(object? sender, AgentEventInfo evt)
