@@ -95,6 +95,41 @@ public sealed class WindowManagerTests
     }
 
     [Fact]
+    public void NativeLocalAiSettingsEntry_BindsRouteBeforeWizardAndPreservesExistingChoices()
+    {
+        var manager = ReadManager();
+        Assert.Contains("if (created && window is { IsClosed: false })", manager);
+        Assert.Contains("window.TryNavigateToExistingNativeLocalAi(native)", manager);
+        var entry = manager[manager.IndexOf("public async Task ShowLocalAiSetupAsync()", StringComparison.Ordinal)..];
+        AssertInOrder(entry, "NativePackageFamilyName: not null", "await EnsureSetupWindowAsync(");
+        var window = File.ReadAllText(Path.Combine(TestRepositoryPaths.GetRepositoryRoot(),
+            @"src\OpenClaw.SetupEngine.UI\SetupWindow.xaml.cs"));
+        var start = window.IndexOf("public bool TryNavigateToExistingNativeLocalAi", StringComparison.Ordinal);
+        var end = window.IndexOf("public bool TryNavigateToWizard", start, StringComparison.Ordinal);
+        AssertInOrder(window[start..end], "AccessDraft.SelectExistingNativeGateway(record)",
+            "_persistStartupPreferenceOnComplete = false", "return TryNavigateToWizard()");
+        var save = window[window.IndexOf("private void SaveSetupChoices", StringComparison.Ordinal)..];
+        AssertInOrder(save, "if (AccessDraft.IsExistingNativeLocalAi)", "return;", "_persistChoices(");
+        Assert.Contains("if (!OnboardingFlowPolicy.UsesWslWorkspaceFinalization(AccessDraft.Route))", window);
+    }
+
+    [Fact]
+    public void LocalAiSettingsRepair_RejectsNativeOwnershipBeforeWslRecoveryAdmission()
+    {
+        var manager = ReadManager();
+        var start = manager.IndexOf("public async Task ShowLocalAiSetupAsync()", StringComparison.Ordinal);
+        var end = manager.IndexOf("private async Task<LocalAiSetupResolution>", start, StringComparison.Ordinal);
+        AssertInOrder(manager[start..end],
+            "TryNavigateToExistingNativeLocalAi(native)",
+            "_callbacks.GetLocalAiGatewayLifecycle?.Invoke()?.HasNativeBinding == true",
+            "release its Gateway ownership before repairing it for WSL.",
+            "ShowHub(\"local-ai\");",
+            "return;",
+            "await ResolveLocalAiSetupRouteAsync()",
+            "await ShowLocalAiSetupRecoveryAsync(");
+    }
+
+    [Fact]
     public void LocalAiRecoveryMode_IsNotAppliedToAnExistingSetupWindow()
     {
         var manager = ReadManager();

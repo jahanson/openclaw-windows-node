@@ -7186,6 +7186,14 @@
   <data name="Onboarding_AiSetup_Legacy.Content" xml:space="preserve"><value>使用经典设置</value></data>
   <data name="Onboarding_AiSetup_Continue.Content" xml:space="preserve"><value>继续</value></data>
   <data name="Onboarding_AiSetup_Connecting" xml:space="preserve"><value>正在连接你的 Gateway...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingHardware" xml:space="preserve"><value>正在检查 NVIDIA GPU 显存和 CUDA 支持...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingFiles" xml:space="preserve"><value>正在验证 llama.cpp 和已下载的模型文件。大型模型可能需要一分钟或更长时间；完整的文件无需重新下载。</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PreparingGateway" xml:space="preserve"><value>正在检查所选 Gateway 及其本地 AI 配置...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_StartingRuntime" xml:space="preserve"><value>正在启动 llama-server 并检查模型。将模型加载到 GPU 显存可能需要一些时间...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PublishingProvider" xml:space="preserve"><value>正在确认 Gateway 中的本地 AI 提供商和主模型...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Verifying" xml:space="preserve"><value>正在通过 Gateway 测试所选模型的实际响应...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Detecting" xml:space="preserve"><value>正在发现已配置的模型和 AI 提供商...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Console" xml:space="preserve"><value>正在打开隔离 Gateway 的诊断控制台...</value></data>
   <data name="Onboarding_AiSetup_Choose" xml:space="preserve"><value>选择模型或连接 AI 提供商。</value></data>
   <data name="Onboarding_AiSetup_Running" xml:space="preserve"><value>按照提供商的步骤完成设置。</value></data>
   <data name="Onboarding_AiSetup_Verifying" xml:space="preserve"><value>模型已保存。正在验证当前 Gateway 连接。</value></data>
@@ -7335,7 +7343,7 @@
   <data name="Onboarding_V2_ProfileFull.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>开放：全部八项能力，包括相机、位置和浏览器控制。</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyTitle.Text" xml:space="preserve"><value>严格</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyDescription.Text" xml:space="preserve"><value>Canvas 和屏幕捕获。命令执行已关闭。</value></data>
-  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>均衡（推荐）</value></data>
+  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>均衡</value></data>
   <data name="Onboarding_V2_ProfileStandardDescription.Text" xml:space="preserve"><value>命令、Canvas、屏幕捕获和语音。</value></data>
   <data name="Onboarding_V2_ProfileFullTitle.Text" xml:space="preserve"><value>开放</value></data>
   <data name="Onboarding_V2_ProfileFullDescription.Text" xml:space="preserve"><value>全部八项能力，包括相机、位置和浏览器控制。</value></data>
@@ -7387,7 +7395,11 @@
   <data name="Onboarding_AiSetup_LocalStartAndUse" xml:space="preserve"><value>启动并使用</value></data>
   <data name="Onboarding_AiSetup_LocalUse" xml:space="preserve"><value>使用此模型</value></data>
   <data name="Onboarding_AiSetup_LocalRepair" xml:space="preserve"><value>修复本地 AI</value></data>
-  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>安装并使用</value></data>
+  <data name="Onboarding_AiSetup_LocalReconcile" xml:space="preserve"><value>恢复并使用本地 AI</value></data>
+  <data name="Onboarding_AiSetup_LocalState_Reconcile" xml:space="preserve"><value>需要恢复所拥有的网关路由。</value></data>
+  <data name="LocalAiPage_ReleaseOwnershipButton.Content" xml:space="preserve"><value>释放网关所有权</value></data>
+  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>安装并使用本地 AI</value></data>
+  <data name="Onboarding_AiSetup_LocalInstalling" xml:space="preserve"><value>正在设置本地 AI</value></data>
   <data name="Onboarding_AiSetup_LocalChanged" xml:space="preserve"><value>Gateway 或本地 AI 的就绪状态已更改。请返回连接 AI 页面并重新检查，然后再安装。</value></data>
   <data name="Onboarding_AiSetup_LocalStartFailed" xml:space="preserve"><value>本地 AI 无法启动。清理已完成。请修复本地 AI 或选择其他提供商。</value></data>
   <data name="Onboarding_AiSetup_LocalState_Checking" xml:space="preserve"><value>正在检查此电脑。你仍可选择 AI 提供商。</value></data>
@@ -7401,7 +7413,6 @@
   <data name="Onboarding_AiSetup_LocalState_UnsupportedGateway" xml:space="preserve"><value>托管本地 AI 要求在此电脑上选定唯一由应用管理的本地 Gateway。不支持远程或归属不明确的 Gateway。</value></data>
   <data name="Onboarding_AiSetup_LocalState_Working" xml:space="preserve"><value>本地 AI 正在启动或停止。请在操作完成后重新检查。</value></data>
   <data name="Onboarding_DashboardLaunchFailed" xml:space="preserve"><value>无法打开仪表板。请检查已验证网关的连接，然后重试。</value></data>
-  <data name="Onboarding_V4_ProfileHeading.Text" xml:space="preserve"><value>选择代理可以执行的操作</value></data>
   <data name="Onboarding_V4_ConnectionOptions.Text" xml:space="preserve"><value>连接选项</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Header" xml:space="preserve"><value>Ollama 共享</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Description" xml:space="preserve"><value>可选</value></data>

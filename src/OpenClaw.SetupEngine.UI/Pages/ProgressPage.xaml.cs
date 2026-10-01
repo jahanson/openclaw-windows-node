@@ -55,8 +55,9 @@ public sealed partial class ProgressPage : Page, IAsyncDisposable
         _activeStepIds = steps
             .Select(step => step.Id)
             .ToHashSet(StringComparer.Ordinal);
-        TitleText.Text = SetupLocalization.GetString(_localAiRecoveryOnly
-            ? "Onboarding_V4_RecoveryTitle" : "Onboarding_V4_InstallationTitle");
+        TitleText.Text = SetupLocalization.GetString(_config.NativeLocalAiAcquisition
+            ? "Onboarding_AiSetup_LocalInstalling"
+            : _localAiRecoveryOnly ? "Onboarding_V4_RecoveryTitle" : "Onboarding_V4_InstallationTitle");
         SubtitleText.Text = SetupLocalization.GetString("Onboarding_V4_InstallationSubtitle");
         if (_localAiRecoveryOnly)
             InstallPhase.Header = SetupLocalization.GetString("Onboarding_V4_RecoveryInstall");
@@ -147,7 +148,7 @@ public sealed partial class ProgressPage : Page, IAsyncDisposable
 
             var steps = BuildSteps(config, _localAiRecoveryOnly);
             var setupOwner = _window;
-            ctx.ExpectedGatewayRegistry = setupOwner?.BeginGatewaySetup();
+            ctx.ExpectedGatewayRegistry = config.NativeLocalAiAcquisition ? null : setupOwner?.BeginGatewaySetup();
             ctx.PersistTraySettings = _window is { } settingsOwner ? settingsOwner.PersistPipelineSettings : null;
             _pipeline = new SetupPipeline(steps);
             _pipeline.StepProgress += OnStepProgress;
@@ -155,7 +156,7 @@ public sealed partial class ProgressPage : Page, IAsyncDisposable
             var pipeline = _pipeline;
             var result = await SetupPipeline.RunWithSettlementAsync(
                 () => Task.Run(() => pipeline.RunAsync(ctx), cts.Token),
-                outcome => setupOwner?.SettleGatewaySetupAsync(ctx.ExpectedGatewayRegistry,
+                outcome => config.NativeLocalAiAcquisition ? Task.CompletedTask : setupOwner?.SettleGatewaySetupAsync(ctx.ExpectedGatewayRegistry,
                     outcome?.Outcome == PipelineOutcome.Success ? config.LocalAiRecoveryGatewayId ?? ctx.GatewayRecordId : null)
                     ?? Task.CompletedTask);
             sw.Stop();
@@ -168,14 +169,20 @@ public sealed partial class ProgressPage : Page, IAsyncDisposable
             if (success)
             {
                 var gatewayId = config.LocalAiRecoveryGatewayId ?? ctx.GatewayRecordId;
-                if (config.LocalAi.Enabled)
+                if (config.LocalAi.Enabled && !config.NativeLocalAiAcquisition)
                 {
                     var modelRef = ctx.ResolvedLocalAiModelRef ??
                         throw new InvalidOperationException("The completed Local AI install did not provide its configured model.");
                     _window?.SetExpectedConfiguredModelRef(modelRef,
                         gatewayId ?? throw new InvalidOperationException("The completed Local AI install did not provide its Gateway."));
                 }
-                if (OnboardingFlowPolicy.RequiresAiSetup(config))
+                if (config.NativeLocalAiAcquisition)
+                {
+                    if (_window is not { } owner)
+                        throw new InvalidOperationException(SetupLocalization.GetString("Onboarding_Flow_CompletionUnavailable"));
+                    owner.ContinueInstalledNativeLocalAi();
+                }
+                else if (OnboardingFlowPolicy.RequiresAiSetup(config))
                 {
                     if (_window?.TryNavigateToWizard() != true)
                         throw new InvalidOperationException(SetupLocalization.GetString("Onboarding_Flow_AiNavigationFailed"));
@@ -397,7 +404,9 @@ public sealed partial class ProgressPage : Page, IAsyncDisposable
     }
 
     private static List<SetupStep> BuildSteps(SetupConfig config, bool localAiRecoveryOnly = false)
-        => OnboardingFlowPolicy.BuildInstallationSteps(localAiRecoveryOnly);
+        => config.NativeLocalAiAcquisition
+            ? SetupStepFactory.BuildNativeLocalAiAcquisitionSteps()
+            : OnboardingFlowPolicy.BuildInstallationSteps(localAiRecoveryOnly);
 }
 
 internal sealed class ProgressAuthorizationPresenter(

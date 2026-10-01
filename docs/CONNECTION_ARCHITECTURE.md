@@ -1,5 +1,123 @@
 # Connection Architecture
 
+## Native Local AI ownership and configuration
+
+Native Local AI configuration uses authenticated Gateway RPC, not CLI batch
+writes. The inspected OpenClaw 2026.9.4 CLI supports batches and expected-current
+guards separately; batch validation followed by a write is not compare-and-swap.
+`LocalAiGatewayRpcConfigurationTransport` captures provider, primary and model
+allowlist from one valid `config.get` response and applies only the changed fields
+with `config.patch { raw, baseHash }`. Conflict, disconnect, session replacement
+or uncertain response requires reconciliation with the original Gateway. There
+is no offline config-file write, blind retry or unguarded rollback.
+
+Gateway `config.patch` merges object arrays by stable ID and requires explicit
+`replacePaths` for destructive array changes. Withdrawing the owned provider
+therefore names only `models.providers.llamacpp.models`, alongside the same fresh
+`baseHash`; it never grants replacement of another provider's models or the model
+allowlist. An `UNAVAILABLE` response can follow successful persistence when
+restart/apply fails, so it remains indeterminate rather than proof of no write.
+
+`NativeLocalAiGatewayTarget` accepts authenticated isolated native records without
+requiring early registry publication. Published connections must still be borrowed
+from `GatewayConnectionManager`; staged connections belong to
+`NativeGatewaySetupConnection`. Remote, WSL and legacy same-user native records
+cannot enter this RPC path. Cancellation before dispatch prevents mutation;
+cancellation after dispatch drains the bounded request.
+
+The optional runtime authentication substrate keeps a stable current-user DPAPI
+credential outside the artifact manifest. The child receives it through
+`LLAMA_API_KEY`, never arguments or the router preset. HTTP clients send Bearer
+headers only after loopback validation; RPC publication carries the provider key
+inside the authenticated request. WSL callers retain their existing behavior.
+`LocalAiGatewayLifecycle` composes this path with the existing WSL lifecycle.
+`LocalAI/gateway-binding.json` records the exact Gateway endpoint and device
+identity, selected model, previous primary, owned allowlist entry and acknowledged
+configuration revision. A write-ahead pending flag is flushed before dispatch.
+An unacknowledged mutation remains pending across app restarts, with no blind
+replay or offline cleanup. A different Gateway cannot adopt the receipt.
+
+Explicit Stop persists `AutomaticRecoveryEnabled=false` in that same receipt
+without relinquishing ownership. Connection notifications use guarded runtime
+Resume rather than explicit Start; the runtime operation gate also prevents a
+resume already queued behind Stop from restarting the listener. Explicit Start
+or Restart re-enables recovery only after successful startup/publication.
+New first-Use bindings start disabled, so a clean failure cannot publish on
+reconnect. Older receipts default to enabled, preserving
+their prior startup behavior.
+
+When stopped intent survives an offline Stop, reconnect performs withdraw-only
+reconciliation under the runtime operation gate. It never starts the listener,
+and rechecks durable intent so a queued withdrawal cannot undo a newer Start.
+Shutdown drains connection-triggered Local AI recovery and disposes the inference
+runtime before disposing the authorized Gateway connection manager.
+
+After a successful Stop, **Release Gateway ownership** in Local AI settings
+explicitly releases the binding. The runtime must be stopped, and a fresh read
+through the original authenticated identity must confirm
+absent provider, restored fallback and absent Companion-added allowlist entry.
+Uncertain writes, offline owners and changed owned fields keep the receipt. Unrelated
+post-withdrawal edits do not prevent release. Close setup before releasing. Release
+before switching or removing the original Gateway, then explicitly choose Use on
+the next Gateway. If already switched, reconnect the original owner first.
+WSL Use and artifact Repair (including Settings Retry setup) refuse admission
+while a native binding exists; they cannot reuse a native-authenticated listener
+with the WSL provider key or replace its shared installation artifacts.
+
+Recovery can confirm an unchanged pre-dispatch revision or an already-withdrawn
+provider whose primary is the saved fallback or the retained endpoint-cycle model.
+If a publication landed before a crash, or an unrelated configuration edit
+changed the whole-config revision while the listener was stopped, explicit
+Start/Use can recreate only the same
+authenticated loopback endpoint from the verified installation receipt. This does
+not replay the Gateway write or change the automatic-port preference. Ownership
+is confirmed only after exact Gateway inference and an unchanged configuration
+revision. Port conflicts, changed providers, failed inference and changed identities
+remain visible failures rather than triggering replacement or credential rotation.
+If the previous endpoint cannot be recovered, its receipt is retained. Restore
+the original port and artifacts, or inspect and withdraw the Local AI route using
+the original Gateway's configuration tools. Matching redacted provider metadata
+alone is insufficient authority to delete a potentially externally edited route.
+
+Native automatic startup waits for the manager-owned connection and an existing
+confirmed selection. Observation and artifact acquisition never switch models.
+Explicit Use publishes the authenticated endpoint, and the existing setup verifier
+performs real inference with the exact primary, without fallback. A changed
+revision is not silently adopted: explicit reconciliation requires the same
+provider/model, successful native inference and an unchanged revision across that
+probe. Native finalization uses this gate after its capability changes, before
+publishing the staged Gateway. Cancellation withdraws its route before releasing
+the native session. Unavailable Gateways and unresolved writes retain their
+receipt and report cleanup as pending.
+
+A reopened, verified installation with an owned failed listener or unresolved
+route offers **Recover and use Local AI**, not artifact Repair. It follows the
+same guarded endpoint-recovery and inference path. Edited provider, primary or
+Companion-added allowlist fields are not adopted or overwritten.
+
+Withdrawal can preserve unrelated configuration edits using a fresh CAS revision.
+An exact unredacted credential or successful inference through the same provider
+must confirm a still-published route. A redacted credential alone never authorizes
+deletion: if that listener is unavailable, explicit recovery remains necessary.
+User-edited allowlist metadata is preserved and its deletion ownership relinquished
+when routing is safely withdrawn. Native startup completes reconciliation and
+publication under the runtime gate, including an already-healthy listener; setup
+never publishes again after that gate has been released. Every admitted non-success
+Start or Restart, including core startup failure and interrupted completion, keeps
+recovery disabled and suppresses status-refresh publication and crash restart until
+explicit Start or Reconcile succeeds. A rejected admission preserves prior intent.
+Clean failures without a listener or unresolved route still allow read-only refresh
+to discover a repaired installation, without automatically starting or publishing it.
+Interrupted Start completion reports a retained listener as failed with unresolved
+routing, rather than Healthy with disabled recovery. A timestamp-only healthy refresh does not invalidate
+successful Use; process, endpoint, model evidence and route readiness still must match.
+
+When routing was already withdrawn externally, teardown still removes an unchanged
+empty allowlist entry owned by Companion through the same write-ahead journal and
+hash-conditional RPC path. Lost replies retain pending ownership; a fresh read must
+confirm cleanup before release. User-edited entries remain untouched. Release still
+requires the documented restored fallback; external primary changes do not relax it.
+
 This document describes the gateway connection system - how the tray app discovers, authenticates with, and maintains connections to OpenClaw gateways.
 
 ## Project structure
@@ -73,8 +191,14 @@ buttons use native `SubtleButtonStyle` state brushes, and Owner uses the native
 `PersonPicture` avatar rather than a font glyph.
 
 `WindowManager` owns Workspace and `HubWindow` independently. The latter is the
-Settings companion and reuses the existing native Settings pages, excluding
-Chat. Owner's Settings, Usage, Pair device, and About links open or focus that
+Settings companion and reuses the existing native Settings pages. Its Chat rail
+item opens or focuses Workspace without selecting a Settings page or replacing
+the retained composer. Its activation is queued after NavigationView completes its
+own focus handling. WindowManager restores a minimized Workspace and explicitly
+requests foreground activation, including when the Chat window is already open.
+The Gateway dashboard action and its channels/integrations
+description live in their own Connection settings card, not above chat.
+Owner's Settings, Usage, Pair device, and About links open or focus that
 companion at `settings`, `usage`, `channels`, and `about` respectively. Closing
 the companion does not close Workspace or discard an unsent chat draft.
 Generic Workspace refocus preserves the current page; explicit page/session
@@ -581,6 +705,12 @@ The bootstrap token is cleared only after operator and node role tokens are both
 In-chat exec approval cards sanitize the gateway's command and message before rendering. If either cannot be reviewed in full because it is truncated, suppressed, or conceals command syntax, the card offers only Deny; the chat provider also rejects Allow RPCs that are not permitted by the matching pending card.
 
 ## Inbound pairing approval (operator)
+
+The approval popup retains its original compact lock header, spacing, scrollable
+identity/access card and icon actions. Reject and Decide later remain grouped
+on the left, with Approve on the right. Long access descriptions wrap within
+the card instead of overflowing horizontally. This presentation does not change
+the approval delay or decision flow.
 
 When **another** device or node requests pairing, the gateway broadcasts `device.pair.requested` / `node.pair.requested` to operators with pairing scope. `OpenClawGatewayClient` refreshes the pending lists and raises `DevicePairListUpdated` / `NodePairListUpdated`, which `GatewayService` forwards via its `PairListsChanged` event.
 

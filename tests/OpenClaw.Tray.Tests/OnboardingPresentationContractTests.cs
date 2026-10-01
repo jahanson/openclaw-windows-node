@@ -18,7 +18,8 @@ public sealed class OnboardingPresentationContractTests
             Assert.DoesNotContain("registry.Save()", source);
         }
         var progress = Read(@"src\OpenClaw.SetupEngine.UI\Pages\ProgressPage.xaml.cs");
-        Assert.Contains("ctx.ExpectedGatewayRegistry = setupOwner?.BeginGatewaySetup()", progress);
+        Assert.Contains("ctx.ExpectedGatewayRegistry = config.NativeLocalAiAcquisition ? null : setupOwner?.BeginGatewaySetup()", progress);
+        Assert.Contains("outcome => config.NativeLocalAiAcquisition ? Task.CompletedTask :", progress);
         Assert.Contains("SetupPipeline.RunWithSettlementAsync", progress);
         Assert.True(progress.IndexOf("SettleGatewaySetupAsync(ctx.ExpectedGatewayRegistry", StringComparison.Ordinal) <
             progress.IndexOf("if (_closed || _window?.IsClosed == true)", StringComparison.Ordinal));
@@ -112,17 +113,16 @@ public sealed class OnboardingPresentationContractTests
     }
 
     [Fact]
-    public void NativeChat_DashboardActionDoesNotDependOnTheWebViewToolbar()
+    public void DashboardAction_LivesInConnectionCardAndRetainsCompactFlyoutShortcut()
     {
-        var document = XDocument.Parse(Read(@"src\OpenClaw.Tray.WinUI\Pages\ChatPage.xaml"));
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var document = XDocument.Parse(Read(@"src\OpenClaw.Tray.WinUI\Pages\ConnectionPage.xaml"));
         var dashboard = Assert.Single(document.Descendants(),
-            element => (string?)element.Attribute(x + "Name") == "DashboardButton");
+            element => (string?)element.Attribute("AutomationProperties.AutomationId") == "ConnectionDashboardButton");
         Assert.Equal("OnOpenDashboard", (string?)dashboard.Attribute("Click"));
-        Assert.DoesNotContain(dashboard.Ancestors(),
-            element => (string?)element.Attribute(x + "Name") == "ToolbarBorder");
+        Assert.Contains(dashboard.Ancestors(),
+            element => (string?)element.Attribute("AutomationProperties.AutomationId") == "ConnectionDashboardCard");
         Assert.Contains("((IAppCommands)CurrentApp).OpenDashboard()",
-            Read(@"src\OpenClaw.Tray.WinUI\Pages\ChatPage.xaml.cs"));
+            Read(@"src\OpenClaw.Tray.WinUI\Pages\ConnectionPage.xaml.cs"));
         Assert.Contains("ChatFlyoutDashboardButton",
             Read(@"src\OpenClaw.Tray.WinUI\Windows\ChatWindow.xaml"));
         Assert.Contains("((IAppCommands)Application.Current).OpenDashboard()",
@@ -321,7 +321,7 @@ public sealed class OnboardingPresentationContractTests
         Assert.Equal("SettingsExpander", editor.Name.LocalName);
         Assert.Equal("False", (string?)editor.Attribute("IsExpanded"));
         Assert.DoesNotContain(xaml.Descendants(), element => (string?)element.Attribute(x + "Name") == "CustomChoice");
-        Assert.Contains(xaml.Descendants(), element => (string?)element.Attribute(x + "Uid") == "Onboarding_V4_ProfileHeading");
+        Assert.DoesNotContain(xaml.Descendants(), element => (string?)element.Attribute(x + "Uid") == "Onboarding_V4_ProfileHeading");
         Assert.Contains(editor.Elements(), element => element.Name.LocalName == "SettingsExpander.ItemsFooter");
         Assert.Contains(editor.Descendants(), element => (string?)element.Attribute(x + "Name") == "SelectedSummary");
         var source = Read(@"src\OpenClaw.SetupEngine.UI\Pages\CapabilitiesPage.xaml.cs");

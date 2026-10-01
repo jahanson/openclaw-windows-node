@@ -7187,6 +7187,14 @@ Het binaire bestand wxc-exec is niet gevonden. {1} Als dit een ontwikkelaarsbuil
   <data name="Onboarding_AiSetup_Legacy.Content" xml:space="preserve"><value>Klassieke installatie</value></data>
   <data name="Onboarding_AiSetup_Continue.Content" xml:space="preserve"><value>Doorgaan</value></data>
   <data name="Onboarding_AiSetup_Connecting" xml:space="preserve"><value>Verbinding maken met je Gateway...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingHardware" xml:space="preserve"><value>NVIDIA GPU-geheugen en CUDA-ondersteuning controleren...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingFiles" xml:space="preserve"><value>llama.cpp en gedownloade modelbestanden controleren. Grote modellen kunnen een minuut of langer duren; intacte bestanden hoeven niet opnieuw te worden gedownload.</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PreparingGateway" xml:space="preserve"><value>De geselecteerde Gateway en de lokale AI-configuratie controleren...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_StartingRuntime" xml:space="preserve"><value>llama-server starten en het model controleren. Het laden in GPU-geheugen kan even duren...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PublishingProvider" xml:space="preserve"><value>De lokale AI-provider en het primaire model in je Gateway bevestigen...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Verifying" xml:space="preserve"><value>Een echt antwoord van het geselecteerde model via je Gateway testen...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Detecting" xml:space="preserve"><value>Geconfigureerde modellen en AI-providers zoeken...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Console" xml:space="preserve"><value>De diagnostische console van de geïsoleerde Gateway openen...</value></data>
   <data name="Onboarding_AiSetup_Choose" xml:space="preserve"><value>Kies een model of verbind een AI-provider.</value></data>
   <data name="Onboarding_AiSetup_Running" xml:space="preserve"><value>Volg de stappen van je provider.</value></data>
   <data name="Onboarding_AiSetup_Verifying" xml:space="preserve"><value>Model opgeslagen. De huidige Gateway-verbinding wordt gecontroleerd.</value></data>
@@ -7336,7 +7344,7 @@ Het binaire bestand wxc-exec is niet gevonden. {1} Als dit een ontwikkelaarsbuil
   <data name="Onboarding_V2_ProfileFull.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Open: alle acht capaciteiten, waaronder camera, locatie en browserbesturing.</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyTitle.Text" xml:space="preserve"><value>Strikt</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyDescription.Text" xml:space="preserve"><value>Canvas en schermopname. Opdrachtuitvoering is uitgeschakeld.</value></data>
-  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>Gebalanceerd (aanbevolen)</value></data>
+  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>Gebalanceerd</value></data>
   <data name="Onboarding_V2_ProfileStandardDescription.Text" xml:space="preserve"><value>Opdrachten, Canvas, schermopname en spraak.</value></data>
   <data name="Onboarding_V2_ProfileFullTitle.Text" xml:space="preserve"><value>Open</value></data>
   <data name="Onboarding_V2_ProfileFullDescription.Text" xml:space="preserve"><value>Alle acht capaciteiten, waaronder camera, locatie en browserbesturing.</value></data>
@@ -7388,7 +7396,11 @@ Het binaire bestand wxc-exec is niet gevonden. {1} Als dit een ontwikkelaarsbuil
   <data name="Onboarding_AiSetup_LocalStartAndUse" xml:space="preserve"><value>Starten en gebruiken</value></data>
   <data name="Onboarding_AiSetup_LocalUse" xml:space="preserve"><value>Dit model gebruiken</value></data>
   <data name="Onboarding_AiSetup_LocalRepair" xml:space="preserve"><value>Lokale AI herstellen</value></data>
-  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>Installeren en gebruiken</value></data>
+  <data name="Onboarding_AiSetup_LocalReconcile" xml:space="preserve"><value>Lokale AI herstellen en gebruiken</value></data>
+  <data name="Onboarding_AiSetup_LocalState_Reconcile" xml:space="preserve"><value>De gekoppelde gatewayroute moet worden hersteld.</value></data>
+  <data name="LocalAiPage_ReleaseOwnershipButton.Content" xml:space="preserve"><value>Gatewaykoppeling vrijgeven</value></data>
+  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>Lokale AI installeren en gebruiken</value></data>
+  <data name="Onboarding_AiSetup_LocalInstalling" xml:space="preserve"><value>Lokale AI instellen</value></data>
   <data name="Onboarding_AiSetup_LocalChanged" xml:space="preserve"><value>De Gateway of de status van lokale AI is gewijzigd. Ga terug naar AI verbinden en controleer opnieuw voordat je installeert.</value></data>
   <data name="Onboarding_AiSetup_LocalStartFailed" xml:space="preserve"><value>Lokale AI kon niet starten. Het opruimen is voltooid. Herstel lokale AI of kies een andere provider.</value></data>
   <data name="Onboarding_AiSetup_LocalState_Checking" xml:space="preserve"><value>Deze pc wordt gecontroleerd. Je kunt nog steeds een AI-provider kiezen.</value></data>
@@ -7402,7 +7414,6 @@ Het binaire bestand wxc-exec is niet gevonden. {1} Als dit een ontwikkelaarsbuil
   <data name="Onboarding_AiSetup_LocalState_UnsupportedGateway" xml:space="preserve"><value>Beheerde lokale AI vereist één door de app beheerde lokale Gateway die op deze pc is geselecteerd. Externe of onduidelijke Gateways worden niet ondersteund.</value></data>
   <data name="Onboarding_AiSetup_LocalState_Working" xml:space="preserve"><value>Lokale AI wordt gestart of gestopt. Controleer opnieuw wanneer dit klaar is.</value></data>
   <data name="Onboarding_DashboardLaunchFailed" xml:space="preserve"><value>Dashboard kan niet worden geopend. Controleer de verbinding met de geverifieerde gateway en probeer het opnieuw.</value></data>
-  <data name="Onboarding_V4_ProfileHeading.Text" xml:space="preserve"><value>Kies wat je agent kan doen</value></data>
   <data name="Onboarding_V4_ConnectionOptions.Text" xml:space="preserve"><value>Verbindingsopties</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Header" xml:space="preserve"><value>Ollama delen</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Description" xml:space="preserve"><value>Optioneel</value></data>

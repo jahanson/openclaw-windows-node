@@ -17,7 +17,8 @@ internal sealed record LlamaRuntimeInstallResult(
     LlamaRuntimeInstallDisposition Disposition,
     bool CreatedThisRun,
     IReadOnlyList<LocalAiVerifiedArchive> VerifiedArchives,
-    LocalAiArtifactRollbackMetadata? Rollback);
+    LocalAiArtifactRollbackMetadata? Rollback,
+    int ReusedCachedArchiveCount = 0);
 
 internal sealed record LlamaRuntimeInspection(bool IsValid, string? VersionOutput, string? Error);
 
@@ -62,6 +63,37 @@ internal sealed class LlamaRuntimeInstaller : ILlamaRuntimeAcquirer
         remove => _artifactInstaller.ProgressChanged -= value;
     }
 
+    /// <summary>
+    /// Installs the pinned llama-server runtime and returns it only after it passes
+    /// executable inspection.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A leftover runtime directory at the target path that no receipt claims is removed
+    /// first. The pinned archives are then installed through
+    /// <see cref="LocalAiArtifactInstaller.InstallAsync"/>, which may reuse verified
+    /// archives from the cache.
+    /// </para>
+    /// <para>
+    /// Cache retention is committed only after inspection accepts the runtime and
+    /// cancellation is checked. If inspection rejects the runtime or the install is
+    /// cancelled, the promoted directory is deleted and the archive cache keeps its
+    /// previous complete sets.
+    /// </para>
+    /// </remarks>
+    /// <param name="localDataDirectory">App-owned local data root that contains the Local AI tree and the archive cache.</param>
+    /// <param name="runtime">Catalog runtime variant whose artifacts are installed.</param>
+    /// <param name="progress">Optional per-phase progress observer, in addition to <see cref="ProgressChanged"/>.</param>
+    /// <param name="cancellationToken">Cancels acquisition and inspection.</param>
+    /// <returns>
+    /// The accepted install, created this run. The caller owns its rollback directory and
+    /// should remove it through <see cref="RemoveInstalledRuntime"/>.
+    /// </returns>
+    /// <exception cref="LocalAiArtifactInstallException">
+    /// The path is unsafe, a leftover runtime cannot be removed safely, acquisition fails,
+    /// or inspection rejects the runtime.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     public async Task<LlamaRuntimeInstallResult> InstallAsync(
         string localDataDirectory,
         LlamaRuntimeVariant runtime,
@@ -113,13 +145,19 @@ internal sealed class LlamaRuntimeInstaller : ILlamaRuntimeAcquirer
                     inspection.Error ?? "The installed llama-server runtime did not pass validation.");
             }
 
+            // Commit cache retention only once the runtime is accepted and the caller has
+            // not cancelled, so a rejected install never evicts older cached runtime sets.
+            cancellationToken.ThrowIfCancellationRequested();
+            _artifactInstaller.CommitArchiveCacheSet(localDataDirectory, archives);
+
             return new LlamaRuntimeInstallResult(
                 installed.InstallDirectory,
                 Path.Combine(installed.InstallDirectory, LlamaRuntimeCatalog.ServerExecutableName),
                 LlamaRuntimeInstallDisposition.Installed,
                 CreatedThisRun: true,
                 installed.VerifiedArchives,
-                installed.Rollback);
+                installed.Rollback,
+                installed.ReusedCachedArchiveCount);
         }
         catch
         {

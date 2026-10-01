@@ -5,13 +5,31 @@ namespace OpenClaw.SetupEngine;
 
 public enum LocalAiOnboardingState
 {
-    Checking, SetUp, StartAndUse, Use, Repair, BusyGpu, Unsupported, Unknown, UnsupportedGateway, Working
+    Checking, SetUp, StartAndUse, Use, Repair, BusyGpu, Unsupported, Unknown, UnsupportedGateway, Working, Reconcile
+}
+
+public enum LocalAiSetupStage
+{
+    CheckingHardware, CheckingFiles, PreparingGateway, StartingRuntime, PublishingProvider
 }
 
 /// <summary>The exact existing Gateway, not a request to create or replace one.</summary>
 public sealed record SetupLocalAiTarget(
     string GatewayId, string DistroName, int GatewayPort,
-    string? ModelCatalogId, int? RequestedLocalAiPort);
+    string? ModelCatalogId, int? RequestedLocalAiPort,
+    bool IsNative = false, string? EndpointBinding = null);
+
+public interface INativeSetupLocalAiHost
+{
+    bool HasNativeSelection { get; }
+    void ConfigureNative(OpenClaw.Connection.GatewayRecord record, IGatewayAiSetupTransport transport,
+        Func<CancellationToken, Task> authorize);
+    void ReleaseNative(IGatewayAiSetupTransport transport);
+    Task ReconcileNativeAsync(IGatewayAiSetupTransport transport, string modelRef, CancellationToken ct);
+    Task WithdrawNativeAsync(CancellationToken ct);
+    Task<SetupLocalAiUseResult> UseInstalledAsync(LocalAiInstallAndUseIntent intent, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress);
+}
 
 public sealed record LocalAiOnboardingSnapshot(
     LocalAiOnboardingState State,
@@ -34,7 +52,7 @@ public sealed record LocalAiOnboardingSnapshot(
             eligibility.SelectionFailureCode == LocalInferenceSelectionFailureCode.NoNvidiaGpu);
 
     public bool CanReview => Target is not null && State is LocalAiOnboardingState.SetUp or LocalAiOnboardingState.Repair;
-    public bool CanUse => Target is not null && State is LocalAiOnboardingState.StartAndUse or LocalAiOnboardingState.Use;
+    public bool CanUse => Target is not null && State is LocalAiOnboardingState.StartAndUse or LocalAiOnboardingState.Use or LocalAiOnboardingState.Reconcile;
     public bool CanRefresh => State is LocalAiOnboardingState.BusyGpu or LocalAiOnboardingState.Unknown or
         LocalAiOnboardingState.Unsupported or LocalAiOnboardingState.UnsupportedGateway or LocalAiOnboardingState.Working;
 
@@ -69,6 +87,10 @@ public sealed record LocalAiOnboardingSnapshot(
         if (eligibility.Status == LocalInferenceEligibilityStatus.EligibleButBusy &&
             !(exactHealthyRuntime && runtime!.ModelEvidence.State == LocalAiModelAvailabilityState.Loaded))
             return result with { State = LocalAiOnboardingState.BusyGpu };
+        if (target.IsNative && install is not null && filesVerified &&
+            (runtime?.GatewayRouteRequiresResolution == true ||
+             runtime is { State: LocalAiRuntimeState.Failed, Ownership: LocalAiOwnership.CompanionManaged }))
+            return result with { State = LocalAiOnboardingState.Reconcile };
         if (receiptDamaged || install is not null && (!filesVerified ||
             runtime?.State is LocalAiRuntimeState.Failed or LocalAiRuntimeState.Conflict ||
             runtime?.State == LocalAiRuntimeState.Healthy && !exactHealthyRuntime))
@@ -98,6 +120,37 @@ public sealed class LocalAiSelectionRejectedException(string message) : InvalidO
 /// <summary>The runtime returned after confirming cleanup. No uncertain publication remains.</summary>
 public sealed class LocalAiStartFailedException(string message) : InvalidOperationException(message);
 
+/// <summary>Window-scoped, single-use consent for the exact native installation reviewed by the user.</summary>
+public sealed class LocalAiInstallAndUseIntent
+{
+    private int _consumed;
+    public SetupLocalAiTarget Target { get; }
+    public SetupLocalAiUseResult Expected { get; }
+    public bool IsConsumed => Volatile.Read(ref _consumed) != 0;
+
+    public LocalAiInstallAndUseIntent(SetupLocalAiTarget target, string modelCatalogId, int requestedPort)
+    {
+        if (!target.IsNative || string.IsNullOrWhiteSpace(target.EndpointBinding) ||
+            string.IsNullOrWhiteSpace(modelCatalogId) || requestedPort is < 0 or > 65535)
+            throw new LocalAiSelectionRejectedException("Review the native Gateway and Local AI model before installing.");
+        Target = target with { ModelCatalogId = modelCatalogId, RequestedLocalAiPort = requestedPort };
+        Expected = new(target.GatewayId, $"llamacpp/{modelCatalogId}");
+    }
+
+    public void Consume()
+    {
+        if (Interlocked.Exchange(ref _consumed, 1) != 0)
+            throw new LocalAiSelectionRejectedException("This Local AI installation action has already been attempted.");
+    }
+
+    public void RequireInstalledSelection(LocalAiOnboardingSnapshot current)
+    {
+        if (!current.CanUse || current.Target != Target || current.ModelRef != Expected.ModelRef ||
+            string.IsNullOrWhiteSpace(current.ReceiptIdentity))
+            throw new LocalAiSelectionRejectedException("The reviewed Gateway or installed Local AI model changed. Review Local AI again.");
+    }
+}
+
 /// <summary>
 /// Owns the explicit local mutation independently of bounded discovery/connection requests.
 /// An uncertain result retains both identities and may only be reconciled, never replayed.
@@ -107,19 +160,31 @@ public sealed class LocalAiOnboardingUse(ISetupLocalAiHost host)
     private Task _mutation = Task.CompletedTask;
     public SetupLocalAiUseResult? Expected { get; private set; }
 
-    public Task UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct)
+    public Task UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress = null)
     {
         if (Expected is not null)
             throw new InvalidOperationException("Reconcile the selected Local AI Gateway and model before another action.");
         Expected = new(selected.Target!.GatewayId, selected.ModelRef!);
-        return _mutation = UseCoreAsync(selected, ct);
+        return _mutation = UseCoreAsync(() => host.UseAsync(selected, ct, progress));
     }
 
-    private async Task UseCoreAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct)
+    public Task UseInstalledAsync(LocalAiInstallAndUseIntent intent, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress = null)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (Expected is not null || host is not INativeSetupLocalAiHost native)
+            throw new LocalAiSelectionRejectedException("Reconnect the selected native Gateway before continuing Local AI setup.");
+        intent.Consume();
+        Expected = intent.Expected;
+        return _mutation = UseCoreAsync(() => native.UseInstalledAsync(intent, ct, progress));
+    }
+
+    private async Task UseCoreAsync(Func<Task<SetupLocalAiUseResult>> action)
     {
         try
         {
-            var used = await host.UseAsync(selected, ct);
+            var used = await action();
             if (used != Expected)
                 throw new InvalidDataException("Local AI returned a different Gateway or model.");
         }
@@ -155,8 +220,12 @@ public interface ISetupLocalAiHost
     OpenClaw.Connection.GatewayRegistrySnapshot BeginGatewaySetup();
     Task ReconcileGatewaySetupAsync(OpenClaw.Connection.GatewayRegistrySnapshot expectedOutput, string? completedGatewayId);
     Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct);
+    Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct, IProgress<LocalAiSetupStage>? progress)
+        => ObserveAsync(ct);
     Task<SetupLocalAiTarget> RevalidateReviewAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct);
     Task<SetupLocalAiUseResult> UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct);
+    Task<SetupLocalAiUseResult> UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress) => UseAsync(selected, ct);
 }
 
 /// <summary>Independent, generation-fenced page observation. No install or runtime mutation port is used here.</summary>
@@ -169,7 +238,9 @@ public sealed class LocalAiOnboardingObservation(ISetupLocalAiHost host) : IAsyn
     public LocalAiOnboardingSnapshot Snapshot { get; private set; } = new(LocalAiOnboardingState.Checking);
     public event Action? Changed;
 
-    public Task RefreshAsync()
+    public Task RefreshAsync() => RefreshAsync(null);
+
+    public Task RefreshAsync(IProgress<LocalAiSetupStage>? progress)
     {
         ObjectDisposedException.ThrowIf(_closed, this);
         _request?.Cancel();
@@ -178,22 +249,31 @@ public sealed class LocalAiOnboardingObservation(ISetupLocalAiHost host) : IAsyn
         var generation = ++_generation;
         Snapshot = new(LocalAiOnboardingState.Checking);
         Changed?.Invoke();
-        var task = ObserveAsync(generation, _request.Token);
+        var task = ObserveAsync(generation, _request.Token, progress);
         _requests.RemoveAll(request => request.IsCompleted);
         _requests.Add(task);
         return task;
     }
 
-    private async Task ObserveAsync(long generation, CancellationToken ct)
+    private async Task ObserveAsync(long generation, CancellationToken ct, IProgress<LocalAiSetupStage>? progress)
     {
         LocalAiOnboardingSnapshot result;
-        try { result = await host.ObserveAsync(ct); }
+        var finished = false;
+        try
+        {
+            result = await host.ObserveAsync(ct, new SynchronousProgress<LocalAiSetupStage>(stage =>
+            {
+                if (!finished && !_closed && !ct.IsCancellationRequested && generation == _generation)
+                    progress?.Report(stage);
+            }));
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
         catch (Exception ex)
         {
             System.Diagnostics.Trace.TraceWarning("Local AI observation failed ({0}).", ex.GetType().Name);
             result = new(LocalAiOnboardingState.Unknown);
         }
+        finally { finished = true; }
         if (_closed || ct.IsCancellationRequested || generation != _generation)
             return;
         Snapshot = result;

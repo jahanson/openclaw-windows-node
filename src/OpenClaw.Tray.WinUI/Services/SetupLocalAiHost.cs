@@ -21,9 +21,51 @@ internal sealed class SetupLocalAiHost(
     Func<CancellationToken, Task<HostHardwareInfo>> probeHardware,
     Func<LocalAiGatewayProviderCoordinator> getProvider,
     Func<GatewayRecord?, GatewayRecord?, Task>? reconcileConnection = null,
-    Action? reportSettlementFailure = null) : ISetupLocalAiHost
+    Action? reportSettlementFailure = null,
+    LocalAiGatewayLifecycle? nativeLifecycle = null) : ISetupLocalAiHost, INativeSetupLocalAiHost
 {
     private GatewayRegistrySnapshot? _setupRegistryBaseline;
+    private GatewayRecord? _nativeRecord;
+    private NativeLocalAiGatewayTarget? _nativeTarget;
+    private IGatewayAiSetupTransport? _nativeTransport;
+    private Func<CancellationToken, Task>? _authorizeNative;
+    public bool HasNativeSelection => _nativeRecord is { } record &&
+        nativeLifecycle?.OwnsGateway(record.Id) == true;
+
+    public async Task ReconcileNativeAsync(IGatewayAiSetupTransport transport, string modelRef, CancellationToken ct)
+    {
+        if (!HasNativeSelection || !modelRef.StartsWith("llamacpp/", StringComparison.Ordinal)) return;
+        var install = await loadInstall(ct) ?? throw new InvalidOperationException("The Local AI receipt is unavailable.");
+        await nativeLifecycle!.ReconcileVerifiedAsync(_nativeRecord!, transport, install, ct);
+    }
+
+    public async Task WithdrawNativeAsync(CancellationToken ct)
+    {
+        if (!HasNativeSelection) return;
+        var runtime = getRuntime() ?? throw new InvalidOperationException("The Local AI runtime is unavailable.");
+        await runtime.StopAsync(ct);
+        if (runtime.Snapshot.Ownership != LocalAiOwnership.None || runtime.Snapshot.GatewayRouteRequiresResolution)
+            throw new InvalidOperationException("The Local AI route could not be withdrawn. Cleanup remains pending for its original Gateway.");
+        await nativeLifecycle!.ForgetWithdrawnAsync(_nativeRecord!.Id, ct);
+    }
+
+    public void ConfigureNative(GatewayRecord record, IGatewayAiSetupTransport transport,
+        Func<CancellationToken, Task> authorize)
+    {
+        if (nativeLifecycle is null)
+            throw new InvalidOperationException("The native Local AI runtime owner is unavailable.");
+        _nativeTarget = NativeLocalAiGatewayTarget.Capture(record, transport.Route);
+        _nativeRecord = record;
+        _nativeTransport = transport;
+        _authorizeNative = authorize;
+        nativeLifecycle.Register(record, transport);
+    }
+
+    public void ReleaseNative(IGatewayAiSetupTransport transport)
+    {
+        nativeLifecycle?.Release(transport);
+        if (ReferenceEquals(_nativeTransport, transport)) _nativeTransport = null;
+    }
 
     public GatewayRegistrySnapshot BeginGatewaySetup() => _setupRegistryBaseline =
         (getRegistry() ?? throw new InvalidOperationException("The Gateway registry is unavailable.")).CapturePersistedSnapshot();
@@ -46,29 +88,53 @@ internal sealed class SetupLocalAiHost(
         }
     }
 
-    public async Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct)
+    public Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct) => ObserveAsync(ct, null);
+
+    public async Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress)
     {
-        var resolution = await resolveRoute().WaitAsync(ct);
-        var target = resolution.RecoveryTarget;
-        if (resolution.Route != LocalAiSetupRoute.Recovery || target is null ||
-            getRegistry()?.GetActive()?.Id != target.GatewayId)
-            return new(LocalAiOnboardingState.UnsupportedGateway);
+        SetupLocalAiTarget target;
+        if (_nativeRecord is { } native)
+        {
+            if (_nativeTransport is { } transport &&
+                (!transport.OperatorScopes.Contains("operator.admin", StringComparer.Ordinal) ||
+                 new[] { "config.get", "config.patch", "openclaw.setup.verify" }
+                    .Any(method => !transport.Methods.Contains(method, StringComparer.Ordinal))))
+                return new(LocalAiOnboardingState.UnsupportedGateway);
+            await _authorizeNative!(ct);
+            target = new(native.Id, string.Empty, new Uri(native.Url).Port,
+                null, null, true, GatewayDashboardBinding.Capture(native));
+        }
+        else
+        {
+            var resolution = await resolveRoute().WaitAsync(ct);
+            var recovery = resolution.RecoveryTarget;
+            if (resolution.Route != LocalAiSetupRoute.Recovery || recovery is null ||
+                getRegistry()?.GetActive()?.Id != recovery.GatewayId)
+                return new(LocalAiOnboardingState.UnsupportedGateway);
+            target = ToTarget(recovery);
+        }
         LocalAiResolvedInstall? install = null;
         bool damaged = false;
         try { install = await loadInstall(ct); }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException) { damaged = true; }
+        progress?.Report(LocalAiSetupStage.CheckingHardware);
         var hardware = await probeHardware(ct);
         var eligibility = LocalInferenceEligibility.Evaluate(hardware, install?.Manifest.ModelCatalogId);
         bool verified = false;
         if (install is not null)
         {
+            progress?.Report(LocalAiSetupStage.CheckingFiles);
             try { verified = await inspectFiles(install, ct); }
             catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException) { damaged = true; }
         }
         ct.ThrowIfCancellationRequested();
-        if (getRegistry()?.GetActive()?.Id != target.GatewayId)
+        if (!target.IsNative && getRegistry()?.GetActive()?.Id != target.GatewayId)
             return new(LocalAiOnboardingState.UnsupportedGateway);
-        return LocalAiOnboardingSnapshot.Project(ToTarget(target), eligibility, install, verified, damaged,
+        if (target.IsNative)
+            target = target with { ModelCatalogId = install?.Manifest.ModelCatalogId,
+                RequestedLocalAiPort = install?.Manifest.RequestedPort };
+        return LocalAiOnboardingSnapshot.Project(target, eligibility, install, verified, damaged,
             getRuntime()?.Snapshot, Identity(install));
     }
 
@@ -80,27 +146,83 @@ internal sealed class SetupLocalAiHost(
         RequireSameSelection(selected, current);
         if (!current.CanReview)
             throw new InvalidOperationException("Local AI readiness changed. Check this PC again.");
+        if (!current.Target!.IsNative && nativeLifecycle?.HasNativeBinding == true)
+            throw new LocalAiSelectionRejectedException(
+                "Stop Local AI and release its native Gateway ownership before repairing it for WSL.");
+        if (current.Target!.IsNative && getRuntime()?.Snapshot is
+            { Ownership: LocalAiOwnership.CompanionManaged } or { GatewayRouteRequiresResolution: true })
+            throw new InvalidOperationException("Stop the owned Local AI runtime and resolve its Gateway route before repairing its files.");
         return current.Target!;
     }
 
-    public async Task<SetupLocalAiUseResult> UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct)
+    public Task<SetupLocalAiUseResult> UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct)
+        => UseAsync(selected, ct, null);
+
+    public async Task<SetupLocalAiUseResult> UseAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress)
     {
         if (!selected.CanUse)
             throw new LocalAiSelectionRejectedException("The selected Local AI model is not ready to start.");
-        var current = await ObserveAsync(ct);
+        var current = await ObserveAsync(ct, progress);
         RequireSameSelection(selected, current);
         if (!current.CanUse)
             throw new LocalAiSelectionRejectedException("Local AI readiness changed. Check this PC again.");
+        return await UseAdmittedAsync(current, ct, progress);
+    }
+
+    public async Task<SetupLocalAiUseResult> UseInstalledAsync(LocalAiInstallAndUseIntent intent, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress)
+    {
+        var current = await ObserveAsync(ct, progress);
+        intent.RequireInstalledSelection(current);
+        return await UseAdmittedAsync(current, ct, progress);
+    }
+
+    private async Task<SetupLocalAiUseResult> UseAdmittedAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct,
+        IProgress<LocalAiSetupStage>? progress)
+    {
         var runtime = getRuntime() ?? throw new InvalidOperationException("The managed Local AI runtime is unavailable.");
         var install = await loadInstall(ct) ?? throw new InvalidOperationException("The Local AI receipt is unavailable.");
         if (Identity(install) != selected.ReceiptIdentity)
             throw new LocalAiSelectionRejectedException("The selected Local AI installation changed.");
-        var provider = getProvider();
-        var admitted = await provider.ValidatePublicationAsync(install, ct);
-        if (!admitted.Success)
-            throw new LocalAiSelectionRejectedException(admitted.Detail ?? "Local AI route publication was not admitted.");
-        RequireActiveTarget(selected.Target!, mutationStarted: false);
-        var started = await runtime.EnsureStartedAsync(ct);
+        LocalAiGatewayProviderCoordinator? provider = null;
+        progress?.Report(LocalAiSetupStage.PreparingGateway);
+        if (selected.Target!.IsNative)
+        {
+            await _authorizeNative!(ct);
+            if (_nativeTransport is null)
+                throw new LocalAiSelectionRejectedException("Reconnect the native Gateway before using Local AI.");
+            if (!nativeLifecycle!.HasNativeBinding && runtime.Snapshot.Ownership == LocalAiOwnership.CompanionManaged)
+                throw new LocalAiSelectionRejectedException("Stop the previous Gateway's Local AI runtime before selecting this native Gateway.");
+            try { await nativeLifecycle.PrepareAsync(install, ct); }
+            catch (LocalAiSelectionRejectedException) when (nativeLifecycle.HasNativeBinding &&
+                runtime.Snapshot.Ownership == LocalAiOwnership.CompanionManaged)
+            {
+                await nativeLifecycle.ReconcileVerifiedAsync(_nativeRecord!, _nativeTransport, install, ct);
+                await nativeLifecycle.PrepareAsync(install, ct);
+            }
+        }
+        else
+        {
+            if (nativeLifecycle?.HasNativeBinding == true)
+                throw new LocalAiSelectionRejectedException(
+                    "Stop Local AI and release its native Gateway ownership before using it with WSL.");
+            provider = getProvider();
+            var admitted = await provider.ValidatePublicationAsync(install, ct);
+            if (!admitted.Success)
+                throw new LocalAiSelectionRejectedException(admitted.Detail ?? "Local AI route publication was not admitted.");
+        }
+        LocalAiRuntimeSnapshot started;
+        try
+        {
+            RequireActiveTarget(selected.Target!, mutationStarted: false);
+            progress?.Report(LocalAiSetupStage.StartingRuntime);
+            started = await runtime.EnsureStartedAsync(ct);
+        }
+        finally
+        {
+            if (selected.Target.IsNative) nativeLifecycle!.EndEndpointRecovery();
+        }
         ct.ThrowIfCancellationRequested();
         RequireActiveTarget(selected.Target!, mutationStarted: true);
         if (started.State is LocalAiRuntimeState.Failed or LocalAiRuntimeState.Conflict &&
@@ -113,15 +235,41 @@ internal sealed class SetupLocalAiHost(
             LocalAiGatewayProviderDefinition.BuildPrimaryModel(install) != selected.ModelRef ||
             started.ModelEvidence.State is not (LocalAiModelAvailabilityState.Verified or LocalAiModelAvailabilityState.Loaded))
             throw new InvalidOperationException("The exact managed Local AI model did not become ready.");
-        var published = await provider.PublishAsync(install, ct);
-        if (!published.Success)
-            throw new InvalidOperationException(published.Detail);
+        progress?.Report(LocalAiSetupStage.PublishingProvider);
+        // Native startup owns publication and recovery authorization under the runtime
+        // gate. A second host write could otherwise republish after a newer Stop.
+        if (!selected.Target.IsNative)
+        {
+            var published = await provider!.PublishAsync(install, ct);
+            if (!published.Success)
+                throw new InvalidOperationException(published.Detail);
+        }
+        else
+        {
+            var current = runtime.Snapshot;
+            if (current.State != started.State || current.Ownership != started.Ownership ||
+                current.Endpoint != started.Endpoint || current.ModelId != started.ModelId ||
+                current.ProcessId != started.ProcessId || current.ProcessStartedAtUtc != started.ProcessStartedAtUtc ||
+                current.GatewayRouteRequiresResolution ||
+                current.ModelEvidence.State is not (LocalAiModelAvailabilityState.Verified or LocalAiModelAvailabilityState.Loaded) ||
+                current.ModelEvidence.Sha256 != started.ModelEvidence.Sha256 ||
+                current.ModelEvidence.SizeBytes != started.ModelEvidence.SizeBytes)
+                throw new InvalidOperationException("The Local AI runtime changed after startup. Review its current state before continuing.");
+        }
         RequireActiveTarget(selected.Target!, mutationStarted: true);
         return new(selected.Target!.GatewayId, selected.ModelRef!);
     }
 
     private void RequireActiveTarget(SetupLocalAiTarget target, bool mutationStarted)
     {
+        if (target.IsNative)
+        {
+            if (_nativeTransport is null || _nativeTarget?.GatewayId != target.GatewayId ||
+                _nativeTarget.Route.EndpointBinding != target.EndpointBinding)
+                throw new LocalAiSelectionRejectedException("The selected native Gateway changed.");
+            _nativeTarget.RequireCurrent(_nativeTransport.Route);
+            return;
+        }
         var registry = getRegistry();
         var snapshot = registry?.GetSnapshot();
         var owners = snapshot is null ? [] : LocalAiGatewayDistroResolver.FindOwners(snapshot.Records);

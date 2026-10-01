@@ -7186,6 +7186,14 @@ Le binaire wxc-exec est introuvable. {1} S'il s'agit d'une build développeur, c
   <data name="Onboarding_AiSetup_Legacy.Content" xml:space="preserve"><value>Configuration classique</value></data>
   <data name="Onboarding_AiSetup_Continue.Content" xml:space="preserve"><value>Continuer</value></data>
   <data name="Onboarding_AiSetup_Connecting" xml:space="preserve"><value>Connexion à votre Gateway...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingHardware" xml:space="preserve"><value>Vérification de la mémoire du GPU NVIDIA et de la prise en charge de CUDA...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_CheckingFiles" xml:space="preserve"><value>Vérification de llama.cpp et des fichiers du modèle téléchargés. Les grands modèles peuvent nécessiter une minute ou plus ; les fichiers intacts ne sont pas téléchargés à nouveau.</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PreparingGateway" xml:space="preserve"><value>Vérification du Gateway sélectionné et de sa configuration d'IA locale...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_StartingRuntime" xml:space="preserve"><value>Démarrage de llama-server et vérification du modèle. Le chargement dans la mémoire du GPU peut prendre du temps...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_PublishingProvider" xml:space="preserve"><value>Confirmation du fournisseur d'IA locale et du modèle principal dans votre Gateway...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Verifying" xml:space="preserve"><value>Test d'une réponse réelle du modèle sélectionné via votre Gateway...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Detecting" xml:space="preserve"><value>Recherche des modèles configurés et des fournisseurs d'IA...</value></data>
+  <data name="Onboarding_AiSetup_LocalProgress_Console" xml:space="preserve"><value>Ouverture de la console de diagnostic du Gateway isolé...</value></data>
   <data name="Onboarding_AiSetup_Choose" xml:space="preserve"><value>Choisissez un modèle ou connectez un fournisseur d’IA.</value></data>
   <data name="Onboarding_AiSetup_Running" xml:space="preserve"><value>Suivez les étapes de votre fournisseur.</value></data>
   <data name="Onboarding_AiSetup_Verifying" xml:space="preserve"><value>Modèle enregistré. Vérification de la connexion actuelle au Gateway.</value></data>
@@ -7335,7 +7343,7 @@ Le binaire wxc-exec est introuvable. {1} S'il s'agit d'une build développeur, c
   <data name="Onboarding_V2_ProfileFull.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Ouvert : les huit capacités, dont la caméra, la localisation et le contrôle du navigateur.</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyTitle.Text" xml:space="preserve"><value>Strict</value></data>
   <data name="Onboarding_V2_ProfileReadOnlyDescription.Text" xml:space="preserve"><value>Canvas et capture d’écran. L’exécution de commandes est désactivée.</value></data>
-  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>Équilibré (recommandé)</value></data>
+  <data name="Onboarding_V2_ProfileStandardTitle.Text" xml:space="preserve"><value>Équilibré</value></data>
   <data name="Onboarding_V2_ProfileStandardDescription.Text" xml:space="preserve"><value>Commandes, Canvas, capture d’écran et voix.</value></data>
   <data name="Onboarding_V2_ProfileFullTitle.Text" xml:space="preserve"><value>Ouvert</value></data>
   <data name="Onboarding_V2_ProfileFullDescription.Text" xml:space="preserve"><value>Les huit capacités, dont la caméra, la localisation et le contrôle du navigateur.</value></data>
@@ -7387,7 +7395,11 @@ Le binaire wxc-exec est introuvable. {1} S'il s'agit d'une build développeur, c
   <data name="Onboarding_AiSetup_LocalStartAndUse" xml:space="preserve"><value>Démarrer et utiliser</value></data>
   <data name="Onboarding_AiSetup_LocalUse" xml:space="preserve"><value>Utiliser ce modèle</value></data>
   <data name="Onboarding_AiSetup_LocalRepair" xml:space="preserve"><value>Réparer l’IA locale</value></data>
-  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>Installer et utiliser</value></data>
+  <data name="Onboarding_AiSetup_LocalReconcile" xml:space="preserve"><value>Récupérer et utiliser l’IA locale</value></data>
+  <data name="Onboarding_AiSetup_LocalState_Reconcile" xml:space="preserve"><value>La route de la passerelle associée doit être récupérée.</value></data>
+  <data name="LocalAiPage_ReleaseOwnershipButton.Content" xml:space="preserve"><value>Libérer l’association à la passerelle</value></data>
+  <data name="Onboarding_AiSetup_LocalInstall" xml:space="preserve"><value>Installer et utiliser l’IA locale</value></data>
+  <data name="Onboarding_AiSetup_LocalInstalling" xml:space="preserve"><value>Configuration de l’IA locale</value></data>
   <data name="Onboarding_AiSetup_LocalChanged" xml:space="preserve"><value>Le Gateway ou la disponibilité de l’IA locale a changé. Revenez à la connexion de votre IA et vérifiez à nouveau avant l’installation.</value></data>
   <data name="Onboarding_AiSetup_LocalStartFailed" xml:space="preserve"><value>L’IA locale n’a pas pu démarrer. Le nettoyage est terminé. Réparez l’IA locale ou choisissez un autre fournisseur.</value></data>
   <data name="Onboarding_AiSetup_LocalState_Checking" xml:space="preserve"><value>Vérification de ce PC. Vous pouvez toujours choisir un fournisseur d’IA.</value></data>
@@ -7401,7 +7413,6 @@ Le binaire wxc-exec est introuvable. {1} S'il s'agit d'une build développeur, c
   <data name="Onboarding_AiSetup_LocalState_UnsupportedGateway" xml:space="preserve"><value>L’IA locale gérée nécessite un seul Gateway local géré par l’application et sélectionné sur ce PC. Les Gateways distants ou ambigus ne sont pas pris en charge.</value></data>
   <data name="Onboarding_AiSetup_LocalState_Working" xml:space="preserve"><value>L’IA locale démarre ou s’arrête. Vérifiez à nouveau une fois l’opération terminée.</value></data>
   <data name="Onboarding_DashboardLaunchFailed" xml:space="preserve"><value>Impossible d’ouvrir le tableau de bord. Vérifiez la connexion à la passerelle validée, puis réessayez.</value></data>
-  <data name="Onboarding_V4_ProfileHeading.Text" xml:space="preserve"><value>Choisissez ce que votre agent peut faire</value></data>
   <data name="Onboarding_V4_ConnectionOptions.Text" xml:space="preserve"><value>Options de connexion</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Header" xml:space="preserve"><value>Partage Ollama</value></data>
   <data name="Onboarding_V4_OllamaDisclosure.Description" xml:space="preserve"><value>Facultatif</value></data>

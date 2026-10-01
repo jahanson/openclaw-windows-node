@@ -428,6 +428,25 @@ excludes any requests already pending, including requests from earlier setup
 attempts. Later cleanup excludes requests that predate the retained successful
 baseline. A socket-provided request ID still uses the exact device-approval path.
 
+### Native Local AI integration
+
+`BuildNativeLocalAiAcquisitionSteps` is an artifact-only pipeline: Windows OS/GPU
+preflight, verified receipt reconciliation, pinned runtime/model acquisition and
+receipt persistence. Unlike WSL recovery, it never installs WSL, changes mirrored
+networking, starts a listener, forces inference, publishes a provider, or restarts
+a Gateway. Its caller must retain exact native-session admission and return to an
+explicit **Use Local AI** action after acquisition.
+
+Native onboarding and Settings select this pipeline only after exact native
+target admission. It does not participate in WSL registry settlement. Acquisition
+returns to AI setup without claiming that a model is configured. Explicit Use
+creates the durable native binding and starts the single app-owned authenticated
+runtime. Existing setup verification proves the exact Gateway primary before
+completion; the native session reconciles its Local AI revision after capability
+configuration and before registry publication. Cancellation drains mutations and
+withdraws the selected Local AI route before releasing the native session.
+A damaged or foreign ownership receipt is never adopted implicitly.
+
 ### Local AI GPU admission
 
 Local AI uses the CUDA driver's `cuMemGetInfo` total and free memory directly
@@ -451,6 +470,30 @@ snapshot or content-addressed blob only through
 materialization copies from that same verified open handle. A configured cache
 root equal to or below the app-owned `LocalAI` directory is rejected before
 mutation because uninstall removes that managed tree recursively.
+
+### Local AI runtime archive cache
+
+Verified llama.cpp runtime zips are kept in
+`<LocalDataDir>\LocalAICache\archives\<sha256>\<file>`, next to the
+uninstall-owned `LocalAI` tree, so reinstalls hash-verify and extract without
+downloading. A cached zip is used only after a full SHA-256 check against the
+compiled-in pin over the same open handle that extraction reads. A set is every
+archive a runtime install pinned together (the llama.cpp binary zip and its CUDA
+dependency zip). Only after the installed runtime passes inspection, and the
+install was not cancelled, setup records the current pins as a completed set in
+`<LocalDataDir>\LocalAICache\sets\<set-id>.json` and prunes: it keeps the current
+pins plus every archive of the 3 most recently used older completed sets, and
+deletes other entries. A rejected or cancelled install never deletes cache
+entries. Archives left by a failed acquisition stay available for a retry of the
+same pins, never count as a set, and are deleted by the next successful install
+of different pins. An archive shared by several sets stays while any kept set
+uses it. Set records are bookkeeping only: reuse is still gated by the SHA-256
+pin check. Set `OPENCLAW_SETUP_LOCAL_AI_CACHE_RETAIN_SETS` to a non-negative
+integer to change the number of older sets kept (`0` keeps only the current
+pins); other values are ignored with a warning. Uninstall keeps the cache, which is bounded
+by this retention and logged with its path so users can delete it to reclaim
+space. Set `OPENCLAW_SETUP_DISABLE_LOCAL_AI_CACHE` to any value other than `0`
+or `false` to skip all cache reads, writes, and pruning.
 
 Manifest schema 3 remains the compatibility format for existing app-owned
 model paths. Passive manifest loads, status refresh, recovery inspection, and
