@@ -173,6 +173,7 @@ public class ElevenLabsDialogClientTests
     {
         using var server = new SocketServer();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var consumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var serverTask = Task.Run(async () =>
         {
             using var socket = await server.AcceptAsync();
@@ -181,6 +182,7 @@ public class ElevenLabsDialogClientTests
             using var close = await ReceiveAsync(socket, timeout.Token);
             Assert.True(close.RootElement.GetProperty("close_socket").GetBoolean());
             await SendAsync(socket, "{\"audio\":\"AAA=\"}", timeout.Token);
+            await consumed.Task.WaitAsync(timeout.Token);
             await SendAsync(socket, terminal, timeout.Token);
             var buffer = new byte[1];
             try { await socket.ReceiveAsync(buffer, timeout.Token); } catch (WebSocketException) { }
@@ -193,7 +195,7 @@ public class ElevenLabsDialogClientTests
         using var client = new ElevenLabsDialogClient(new LoopbackTransport(server.Endpoint));
         var received = 0;
         var error = await Assert.ThrowsAsync<DialogProviderException>(() => client.StreamAsync(Request, Text(),
-            (audio, _) => { received += audio.Length; return ValueTask.CompletedTask; }, timeout.Token));
+            (audio, _) => { received += audio.Length; consumed.TrySetResult(); return ValueTask.CompletedTask; }, timeout.Token));
         Assert.Equal(2, received);
         Assert.Equal(expected, error.Reason);
         Assert.DoesNotContain("private provider body", error.ToString());
@@ -343,6 +345,32 @@ public class ElevenLabsDialogClientTests
         Assert.Equal(0, handler.Calls);
     }
 
+    [Fact]
+    public async Task WrittenReading_ReportsProviderAudioLimitWithoutCallingItAComposedTextLimit()
+    {
+        using var server = new SocketServer();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var serverTask = Task.Run(async () =>
+        {
+            using var socket = await server.AcceptAsync();
+            using var setup = await ReceiveAsync(socket, timeout.Token);
+            using var input = await ReceiveAsync(socket, timeout.Token);
+            using var close = await ReceiveAsync(socket, timeout.Token);
+            try
+            {
+                await SendAsync(socket, new string(' ', 1024 * 1024 + 1), timeout.Token);
+                await socket.ReceiveAsync(new byte[1], timeout.Token);
+            }
+            catch (WebSocketException) { }
+        }, timeout.Token);
+        using var client = new ElevenLabsDialogClient(new LoopbackTransport(server.Endpoint));
+        var player = new WasapiPcmPlayback(() => new ReadingOutput(_ => throw new Exception("No valid audio to play")));
+        var error = await Assert.ThrowsAsync<WrittenAnswerReadingException>(() =>
+            new WrittenAnswerSpeechPlayback(client, player).PlayAsync(Request, new string('x', 2100), timeout.Token));
+        Assert.Equal("written-answer-audio-limit", error.Reason);
+        await serverTask;
+    }
+
     private sealed class ReadingOutput(Action<ReadingOutput> started) : IWavePlayer, IWavePosition
     {
         private IWaveProvider? _provider;
@@ -378,6 +406,127 @@ public class ElevenLabsDialogClientTests
             count();
             return base.SendAsync(request, token);
         }
+    }
+
+    [Fact]
+    public async Task Live_RespondsToProviderPingWhilePlaybackConsumerIsBlocked()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var endpoint = new Uri($"ws://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var serverTask = Task.Run(async () =>
+        {
+            using var connection = await listener.AcceptTcpClientAsync(timeout.Token);
+            using var stream = connection.GetStream();
+            var headers = new System.Text.StringBuilder();
+            var one = new byte[1];
+            while (!headers.ToString().EndsWith("\r\n\r\n", StringComparison.Ordinal))
+            {
+                Assert.True(headers.Length < 8192);
+                await stream.ReadExactlyAsync(one, timeout.Token);
+                headers.Append((char)one[0]);
+            }
+            var key = headers.ToString().Split("\r\n").Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase)).Split(':', 2)[1].Trim();
+            var accept = Convert.ToBase64String(System.Security.Cryptography.SHA1.HashData(
+                System.Text.Encoding.ASCII.GetBytes(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"), timeout.Token);
+            using var socket = WebSocket.CreateFromStream(stream, new WebSocketCreationOptions { IsServer = true });
+            using var setup = await ReceiveAsync(socket, timeout.Token);
+            using var input = await ReceiveAsync(socket, timeout.Token);
+            using var close = await ReceiveAsync(socket, timeout.Token);
+            await SendAsync(socket, "{\"audio\":\"AAA=\"}", timeout.Token);
+            await entered.Task.WaitAsync(timeout.Token);
+            // The public WebSocket API cannot explicitly send PING, so this independent
+            // protocol peer emits the RFC 6455 control frame on its own transport.
+            await stream.WriteAsync(new byte[] { 0x89, 0x00 }, timeout.Token);
+            var pong = new byte[6]; // Client control frames carry a four-byte masking key.
+            await stream.ReadExactlyAsync(pong, timeout.Token).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal(0x8A, pong[0]);
+            Assert.Equal(0x80, pong[1]);
+            await SendAsync(socket, "{\"is_final\":true}", timeout.Token);
+            release.TrySetResult();
+            try { await socket.ReceiveAsync(new byte[1], timeout.Token); } catch (WebSocketException) { }
+        }, timeout.Token);
+        static async IAsyncEnumerable<string> Text() { yield return "A bounded speech section."; await Task.CompletedTask; }
+        using var client = new ElevenLabsDialogClient(new LoopbackTransport(endpoint));
+        var speech = client.StreamAsync(Request, Text(), async (_, token) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+        }, timeout.Token);
+        try
+        {
+            await serverTask;
+            await speech;
+        }
+        finally
+        {
+            release.TrySetResult();
+            timeout.Cancel();
+            try { await speech; } catch (Exception) { }
+        }
+    }
+
+    [Fact]
+    public async Task Live_RejectsQueuedChunkOverflowWhileConsumerIsBlocked()
+    {
+        using var server = new SocketServer();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var consumerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var serverTask = Task.Run(async () =>
+        {
+            using var socket = await server.AcceptAsync();
+            using var setup = await ReceiveAsync(socket, timeout.Token);
+            using var input = await ReceiveAsync(socket, timeout.Token);
+            using var close = await ReceiveAsync(socket, timeout.Token);
+            await SendAsync(socket, "{\"audio\":\"AAA=\"}", timeout.Token);
+            await entered.Task.WaitAsync(timeout.Token);
+            try
+            {
+                for (var i = 0; i < 5000; i++)
+                    await SendAsync(socket, "{\"audio\":\"AAA=\"}", timeout.Token);
+                await socket.ReceiveAsync(new byte[1], timeout.Token);
+            }
+            catch (WebSocketException) { }
+        }, timeout.Token);
+        static async IAsyncEnumerable<string> Text() { yield return "A bounded speech section."; await Task.CompletedTask; }
+        using var client = new ElevenLabsDialogClient(new LoopbackTransport(server.Endpoint));
+        var speech = client.StreamAsync(Request, Text(), async (_, token) =>
+        {
+            entered.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, token); }
+            catch (OperationCanceledException) { consumerCancelled.TrySetResult(); throw; }
+        }, timeout.Token);
+        var error = await Assert.ThrowsAsync<DialogProviderException>(() => speech.WaitAsync(timeout.Token));
+        Assert.Equal(DialogProviderFailure.Limit, error.Reason);
+        await consumerCancelled.Task.WaitAsync(timeout.Token);
+        await serverTask;
+    }
+
+    [Fact]
+    public async Task Live_ConsumerFailureCancelsReceiveWithoutWaitingForProviderFinal()
+    {
+        using var server = new SocketServer();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var serverTask = Task.Run(async () =>
+        {
+            using var socket = await server.AcceptAsync();
+            using var setup = await ReceiveAsync(socket, timeout.Token);
+            using var input = await ReceiveAsync(socket, timeout.Token);
+            using var close = await ReceiveAsync(socket, timeout.Token);
+            await SendAsync(socket, "{\"audio\":\"AAA=\"}", timeout.Token);
+            try { await socket.ReceiveAsync(new byte[1], timeout.Token); } catch (WebSocketException) { }
+        }, timeout.Token);
+        static async IAsyncEnumerable<string> Text() { yield return "A bounded speech section."; await Task.CompletedTask; }
+        using var client = new ElevenLabsDialogClient(new LoopbackTransport(server.Endpoint));
+        await Assert.ThrowsAsync<IOException>(() => client.StreamAsync(Request, Text(),
+            (_, _) => throw new IOException("Output device removed"), timeout.Token).WaitAsync(TimeSpan.FromSeconds(2)));
+        await serverTask;
     }
 
     private static async Task<JsonDocument> ReceiveAsync(WebSocket socket, CancellationToken token)

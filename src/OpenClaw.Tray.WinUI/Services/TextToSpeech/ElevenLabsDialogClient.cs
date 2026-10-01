@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
+using System.Threading.Channels;
 
 namespace OpenClawTray.Services;
 
@@ -26,7 +27,9 @@ public sealed class DialogProviderException(DialogProviderFailure reason, string
 
 /// <summary>
 /// Single-voice v4 dialogue transport. Each invocation owns its connection and never retries synthesis.
-/// Audio callbacks apply backpressure and must honor cancellation. No credentials or provider bodies enter errors.
+/// Playback callbacks must honor cancellation. Network reception continues independently
+/// within the total audio limit so slow playback cannot starve WebSocket control frames.
+/// No credentials or provider bodies enter errors.
 /// </summary>
 public sealed class ElevenLabsDialogClient : IDisposable
 {
@@ -110,6 +113,11 @@ public sealed class ElevenLabsDialogClient : IDisposable
         using var sends = new SemaphoreSlim(1);
         Task? sender = null;
         Task? receiver = null;
+        Task? consumer = null;
+        // Bound both PCM bytes and per-chunk overhead. Never wait for playback from
+        // the network reader: exceeding either limit fails instead of starving control frames.
+        var audioQueue = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(4096)
+            { SingleWriter = true, SingleReader = true, AllowSynchronousContinuations = false });
         var inputClosed = false;
         try
         {
@@ -120,10 +128,16 @@ public sealed class ElevenLabsDialogClient : IDisposable
             await SendAsync(new { voices = new[] { request.VoiceId }, xi_api_key = request.ApiKey }).ConfigureAwait(false);
             sender = SendTextAsync();
             receiver = ReceiveAudioAsync();
-            // A failure in either direction cancels the other before awaiting its cleanup.
-            var first = await Task.WhenAny(sender, receiver).WaitAsync(operationToken).ConfigureAwait(false);
-            await first.WaitAsync(operationToken).ConfigureAwait(false);
-            await Task.WhenAll(sender, receiver).WaitAsync(operationToken).ConfigureAwait(false);
+            consumer = ConsumeAudioAsync();
+            // Observe each completion independently: an already-finished sender must
+            // not hide a receiver/consumer failure behind a still-blocked sibling.
+            var pending = new List<Task> { sender, receiver, consumer };
+            while (pending.Count > 0)
+            {
+                var completed = await Task.WhenAny(pending).WaitAsync(operationToken).ConfigureAwait(false);
+                await completed.WaitAsync(operationToken).ConfigureAwait(false);
+                pending.Remove(completed);
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw Fail(DialogProviderFailure.Timeout, "ElevenLabs streaming timed out."); }
@@ -139,6 +153,7 @@ public sealed class ElevenLabsDialogClient : IDisposable
             // The cancelled token and aborted socket prevent any subsequent send or audio delivery.
             if (sender is not null) await ObserveCleanupAsync(sender).ConfigureAwait(false);
             if (receiver is not null) await ObserveCleanupAsync(receiver).ConfigureAwait(false);
+            if (consumer is not null) await ObserveCleanupAsync(consumer).ConfigureAwait(false);
         }
 
         async Task SendAsync(object value)
@@ -211,15 +226,26 @@ public sealed class ElevenLabsDialogClient : IDisposable
                     if (bytes.Length % AudioFormat.BlockAlign != 0)
                         throw Fail(DialogProviderFailure.InvalidAudio, "ElevenLabs returned incomplete PCM audio.");
                     operationToken.ThrowIfCancellationRequested();
-                    await onAudio(bytes, operationToken).ConfigureAwait(false);
+                    if (!audioQueue.Writer.TryWrite(bytes))
+                        throw Fail(DialogProviderFailure.Limit, "ElevenLabs audio exceeded the queued chunk limit.");
                 }
                 if (root.TryGetProperty("is_final", out var final) && final.ValueKind == JsonValueKind.True)
                 {
                     if (!Volatile.Read(ref inputClosed))
                         throw Fail(DialogProviderFailure.Protocol, "ElevenLabs ended audio before all speech was submitted.");
                     if (total == 0) throw Fail(DialogProviderFailure.InvalidAudio, "ElevenLabs returned empty audio.");
+                    audioQueue.Writer.TryComplete();
                     return;
                 }
+            }
+        }
+
+        async Task ConsumeAudioAsync()
+        {
+            await foreach (var bytes in audioQueue.Reader.ReadAllAsync(operationToken).ConfigureAwait(false))
+            {
+                operationToken.ThrowIfCancellationRequested();
+                await onAudio(bytes, operationToken).ConfigureAwait(false);
             }
         }
     }

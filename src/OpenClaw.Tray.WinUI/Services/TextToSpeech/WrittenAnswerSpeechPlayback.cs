@@ -44,6 +44,12 @@ public sealed class WrittenAnswerSpeechPlayback(ElevenLabsDialogClient client, W
                     }, token), lifetime.Token, reportPhase).ConfigureAwait(false);
             }
         }
+        catch (DialogProviderException error) when (error.Reason == DialogProviderFailure.Limit)
+        {
+            // Every section passed the stricter text preflight. Provider-side limits
+            // here concern audio/frame buffering, not the composed rendition contract.
+            throw new WrittenAnswerReadingException("written-answer-audio-limit");
+        }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // A player/provider deadline is a failure, not a user pressing Stop.
