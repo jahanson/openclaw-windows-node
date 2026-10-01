@@ -94,7 +94,12 @@ public static class ReactorChatHostExtensions
         Action? onStopSpeaking = null,
         Action<string>? onOpenCheckpoints = null,
         bool isCompact = false,
-        bool showSessionPicker = true)
+        bool showSessionPicker = true,
+        Func<ChatSpeechAction, Task<SpeechAttemptResult>>? onSpeechAction = null,
+        Action<string?>? onSpeechSessionSelected = null,
+        ChatSpeechAttemptOwner? speechState = null,
+        Func<bool>? isDialogEnabled = null,
+        Func<string>? speechMode = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(target);
@@ -120,7 +125,12 @@ public static class ReactorChatHostExtensions
             onStopSpeaking,
             onOpenCheckpoints,
             isCompact,
-            ShowSessionPicker: showSessionPicker);
+            ShowSessionPicker: showSessionPicker,
+            OnSpeechAction: onSpeechAction,
+            OnSpeechSessionSelected: onSpeechSessionSelected,
+            SpeechState: speechState,
+            IsDialogEnabled: isDialogEnabled,
+            SpeechMode: speechMode);
         var host = new ReactorHostControl();
         host.Mount(_ => Component<OpenClawReactorChatRoot, OpenClawReactorChatRootProps>(props));
         target.Child = host;

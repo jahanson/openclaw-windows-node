@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using OpenClawTray.Presentation;
+using OpenClawTray.Services;
 
 namespace OpenClaw.Tray.Tests.Presentation;
 
@@ -103,7 +104,7 @@ public sealed class HubPageRegistryTests
                 "connection", "local-ai", "chat", "sessions", "agentevents", "skills",
                 "agent:alpha:cron", "agent:alpha", "channels", "instances", "config",
                 "usage", "bindings", "permissions", "settings", "notifications",
-                "chat", null
+                null, null
             },
             commands.Select(CommandValue).ToArray());
         Assert.Equal(
@@ -112,8 +113,21 @@ public sealed class HubPageRegistryTests
         Assert.Equal("Command_GoToConnection_Title", commands[0].Title);
         Assert.Equal("Command_GoToConnection_Subtitle", commands[0].Subtitle);
         Assert.Equal("Cron alpha", commands[6].Title);
+        Assert.Equal(HubCommandActionKind.OpenChat, commands[16].Action.Kind);
         Assert.Equal(HubCommandActionKind.OpenDashboard, commands[17].Action.Kind);
         Assert.Null(commands[17].Action.Value);
+    }
+
+    [Fact]
+    public void OpenChatWindowCommand_DispatchesTheStandaloneChatAction()
+    {
+        var command = HubPageRegistry.BuildCommands(Context()).Single(item =>
+            item.Title == "Command_OpenChatWindow_Title");
+        using var app = new FakeAppCommands();
+
+        Assert.True(HubCommandActionDispatcher.TryDispatch(command.Action, app));
+
+        Assert.Equal(1, app.ShowChatCount);
     }
 
     [Fact]

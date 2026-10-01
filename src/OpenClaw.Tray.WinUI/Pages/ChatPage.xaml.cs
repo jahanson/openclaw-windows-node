@@ -35,6 +35,7 @@ public sealed partial class ChatPage : Page
     private readonly PendingVoiceActivation _pendingVoice = new();
     private MountedReactorChat? _reactorHost;
     private IChatDataProvider? _mountedProvider;
+    private string? _speechSessionKey;
     private IChatDataProvider? _accessibilityTestProvider;
     private string? _mountedThreadId;
     private string? _chatUrl;
@@ -96,6 +97,10 @@ public sealed partial class ChatPage : Page
     public ChatPage()
     {
         InitializeComponent();
+        ChatHost.GotFocus += (_, _) =>
+        {
+            if (_pageActive && !_webViewMode) CurrentApp.UpdateChatSpeechSurface(this, _speechSessionKey, true, true);
+        };
         Unloaded += OnUnloaded;
     }
 
@@ -398,7 +403,16 @@ public sealed partial class ChatPage : Page
             onReadAloud: readAloud,
             onStopSpeaking: () => app?.StopChatSpeaking(),
             onOpenCheckpoints: OpenSessionCheckpoints,
-            showSessionPicker: _ownerWindow is not WorkspaceWindow);
+            showSessionPicker: _ownerWindow is not WorkspaceWindow,
+            onSpeechAction: ChatSpeechActionPresenter.HandleAsync,
+            onSpeechSessionSelected: key =>
+            {
+                _speechSessionKey = key;
+                app?.UpdateChatSpeechSurface(this, key, _pageActive && !_webViewMode, true);
+            },
+            speechState: app?.ChatSpeechState,
+            isDialogEnabled: () => app?.Settings.ChatSpeechProvider == "elevenlabs-dialog",
+            speechMode: () => app?.Settings.ChatSpeechMode ?? "auto");
         _mountedProvider = provider;
         _mountedThreadId = threadIdToMount;
         UpdateNativeChatSurfaceActive();
@@ -750,7 +764,10 @@ public sealed partial class ChatPage : Page
     private void UpdateNativeChatSurfaceActive()
     {
         if (App.Current is App app)
+        {
             app.SetHubNativeChatSurfaceActive(_pageActive && !_webViewMode && _reactorHost is not null);
+            app.UpdateChatSpeechSurface(this, _speechSessionKey, _pageActive && !_webViewMode && _reactorHost is not null);
+        }
     }
 
     private async Task InitializeWebViewAsync(SettingsManager settings)

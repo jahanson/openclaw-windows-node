@@ -149,6 +149,8 @@ public partial class App
         {
             ApplyThemePreferenceToOpenWindows();
             _windowManager?.RefreshHubDiagnosticsNavigationVisibility();
+            _chatCoordinator?.RefreshSpeechSettings();
+            OpenClawTray.Chat.OpenClawReactorChatRoot.NotifySpeechSettingsChanged();
             SettingsChanged?.Invoke(this, EventArgs.Empty);
             PermissionsRuntimeChanged?.Invoke(this, EventArgs.Empty);
         }

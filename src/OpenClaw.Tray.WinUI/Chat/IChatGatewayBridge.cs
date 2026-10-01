@@ -95,7 +95,9 @@ public interface IChatGatewayBridge : IDisposable
 
     event EventHandler<ConnectionStatus>? StatusChanged;
     event EventHandler<SessionInfo[]>? SessionsUpdated;
+    event EventHandler<GatewaySessionInvalidation>? SessionInvalidating { add { } remove { } }
     event EventHandler<SessionCommandResult>? SessionCommandCompleted;
+    event EventHandler<AgentEventInfo>? RawChatEventReceived { add { } remove { } }
     event EventHandler<ChatMessageInfo>? ChatMessageReceived;
     event EventHandler<AgentEventInfo>? AgentEventReceived;
     event EventHandler<ModelsListInfo>? ModelsListUpdated;
@@ -109,7 +111,9 @@ public sealed class GatewayClientChatBridge : IChatGatewayBridge
     private readonly OpenClawGatewayClient _client;
     private readonly EventHandler<ConnectionStatus> _statusChangedHandler;
     private readonly EventHandler<SessionInfo[]> _sessionsUpdatedHandler;
+    private readonly EventHandler<GatewaySessionInvalidation> _sessionInvalidatingHandler;
     private readonly EventHandler<SessionCommandResult> _sessionCommandCompletedHandler;
+    private readonly EventHandler<AgentEventInfo> _rawChatEventReceivedHandler;
     private readonly EventHandler<ChatMessageInfo> _chatMessageReceivedHandler;
     private readonly EventHandler<AgentEventInfo> _agentEventReceivedHandler;
     private readonly EventHandler<ModelsListInfo> _modelsListUpdatedHandler;
@@ -145,7 +149,10 @@ public sealed class GatewayClientChatBridge : IChatGatewayBridge
             }
         };
         _sessionsUpdatedHandler = (s, e) => SessionsUpdated?.Invoke(s, e);
+        _sessionInvalidatingHandler = (s, e) => SessionInvalidating?.Invoke(s, e);
+        _client.SessionInvalidating += _sessionInvalidatingHandler;
         _sessionCommandCompletedHandler = (s, e) => SessionCommandCompleted?.Invoke(s, e);
+        _rawChatEventReceivedHandler = (s, e) => RawChatEventReceived?.Invoke(s, e);
         _chatMessageReceivedHandler = (s, e) => ChatMessageReceived?.Invoke(s, e);
         _agentEventReceivedHandler = (s, e) => AgentEventReceived?.Invoke(s, e);
         _modelsListUpdatedHandler = (s, e) =>
@@ -170,6 +177,7 @@ public sealed class GatewayClientChatBridge : IChatGatewayBridge
         _client.StatusChanged += _statusChangedHandler;
         _client.SessionsUpdated += _sessionsUpdatedHandler;
         _client.SessionCommandCompleted += _sessionCommandCompletedHandler;
+        _client.ChatEventReceived += _rawChatEventReceivedHandler;
         _client.ChatMessageReceived += _chatMessageReceivedHandler;
         _client.AgentEventReceived += _agentEventReceivedHandler;
         _client.ModelsListUpdated += _modelsListUpdatedHandler;
@@ -266,19 +274,23 @@ public sealed class GatewayClientChatBridge : IChatGatewayBridge
 
     public event EventHandler<ConnectionStatus>? StatusChanged;
     public event EventHandler<SessionInfo[]>? SessionsUpdated;
+    public event EventHandler<GatewaySessionInvalidation>? SessionInvalidating;
     public event EventHandler<SessionCommandResult>? SessionCommandCompleted;
+    public event EventHandler<AgentEventInfo>? RawChatEventReceived;
     public event EventHandler<ChatMessageInfo>? ChatMessageReceived;
     public event EventHandler<AgentEventInfo>? AgentEventReceived;
     public event EventHandler<ModelsListInfo>? ModelsListUpdated;
 
     public void Dispose()
     {
+        _client.SessionInvalidating -= _sessionInvalidatingHandler;
         if (_disposed) return;
         _disposed = true;
 
         _client.StatusChanged -= _statusChangedHandler;
         _client.SessionsUpdated -= _sessionsUpdatedHandler;
         _client.SessionCommandCompleted -= _sessionCommandCompletedHandler;
+        _client.ChatEventReceived -= _rawChatEventReceivedHandler;
         _client.ChatMessageReceived -= _chatMessageReceivedHandler;
         _client.AgentEventReceived -= _agentEventReceivedHandler;
         _client.ModelsListUpdated -= _modelsListUpdatedHandler;
@@ -286,6 +298,7 @@ public sealed class GatewayClientChatBridge : IChatGatewayBridge
         StatusChanged = null;
         SessionsUpdated = null;
         SessionCommandCompleted = null;
+        RawChatEventReceived = null;
         ChatMessageReceived = null;
         AgentEventReceived = null;
         ModelsListUpdated = null;

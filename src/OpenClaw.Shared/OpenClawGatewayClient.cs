@@ -780,6 +780,7 @@ public partial class OpenClawGatewayClient : WebSocketClientBase, IOperatorGatew
                 SessionKey = sessionKey,
                 Role = role,
                 Text = text,
+                SpeechRendition = Speech.SpeechHistoryReader.Read(m, sessionKey, info.SessionId, openClawMetadata.Id),
                 ToolContent = toolContent,
                 ContentParts = contentParts,
                 State = "final",
@@ -1302,6 +1303,7 @@ public partial class OpenClawGatewayClient : WebSocketClientBase, IOperatorGatew
 
     public async Task<JsonElement> SendWizardRequestAsync(string method, object? parameters = null, int timeoutMs = 30000)
     {
+        NotifySessionMutationStarting(method, parameters);
         var connectionGeneration = GetReadyConnectionGeneration(method);
 
         // #1418: wizard requests are application RPCs (models.list,
@@ -2248,6 +2250,7 @@ public partial class OpenClawGatewayClient : WebSocketClientBase, IOperatorGatew
     /// </summary>
     private async Task<bool> SendTrackedRequestAsync(string method, object? parameters = null)
     {
+        NotifySessionMutationStarting(method, parameters);
         if (!TryGetReadyConnectionGeneration(out var connectionGeneration))
         {
             _logger.Debug($"[GatewayClient] {method} suppressed before handshake");
@@ -3513,6 +3516,8 @@ public partial class OpenClawGatewayClient : WebSocketClientBase, IOperatorGatew
                     TryParsePresenceFromBroadcast(presPayload);
                 break;
             case "sessions.changed":
+                if (root.TryGetProperty("payload", out var lifecycleChange))
+                    NotifyRemoteSessionMutation(lifecycleChange);
                 if (root.TryGetProperty("payload", out var sessionChange) &&
                     sessionChange.ValueKind == JsonValueKind.Object &&
                     sessionChange.TryGetProperty("reason", out var changeReason) &&

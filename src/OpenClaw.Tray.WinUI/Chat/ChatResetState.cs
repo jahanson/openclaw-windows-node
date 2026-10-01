@@ -409,6 +409,29 @@ internal sealed class ChatResetState
         return TryOpenPendingLifecycle(threadId, runId);
     }
 
+    internal bool TryAcceptOwnedTerminal(
+        string threadId,
+        AgentEventInfo terminal)
+    {
+        if (string.IsNullOrWhiteSpace(terminal.RunId) ||
+            _ignoredRunIds.TryGetValue(threadId, out var ignored) &&
+            ignored.Contains(terminal.RunId))
+        {
+            return false;
+        }
+
+        var timestampMs = terminal.Ts > 0 ? (long)terminal.Ts : 0;
+        if (!_awaitingUserMessage.Contains(threadId))
+            return IsTimestampAcceptedForRun(threadId, terminal.RunId, timestampMs);
+
+        // The caller has already proved this run against the current queue's
+        // thread-scoped run mapping. That mapping is installed before
+        // chat.send, so it also covers an empty terminal that the receive loop
+        // observes before the send-response continuation records acceptedRunId.
+        OpenGate(threadId, terminal);
+        return true;
+    }
+
     internal AgentEventInfo? RecordLocalSendWithoutRun(
         string threadId,
         long resetVersion,

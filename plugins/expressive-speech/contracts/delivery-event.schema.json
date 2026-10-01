@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openclaw-windows:expressive-speech:delivery-event:1",
+  "title": "Expressive speech delivery event v1",
+  "type": "object",
+  "required": ["protocol", "identity", "sequence", "kind"],
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "required": ["major", "minor"],
+      "properties": { "major": { "const": 1 }, "minor": { "type": "integer", "minimum": 0 } }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["sessionKey", "sessionIncarnation", "responseId", "renditionId"],
+      "properties": {
+        "sessionKey": { "$ref": "#/$defs/id" },
+        "sessionIncarnation": { "$ref": "#/$defs/id" },
+        "responseId": { "$ref": "#/$defs/id" },
+        "renditionId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "kind": { "enum": ["begin", "segment", "terminal"] },
+    "text": { "type": ["string", "null"], "pattern": "^[^\\r]*$" },
+    "messageId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "origin": { "type": ["string", "null"] },
+    "cueFormat": { "type": ["string", "null"] },
+    "outcome": { "type": ["string", "null"] },
+    "reason": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }
+  },
+  "oneOf": [
+    {
+      "required": ["origin", "cueFormat"],
+      "properties": { "kind": { "const": "begin" }, "sequence": { "const": 0 }, "origin": { "const": "composed" }, "cueFormat": { "const": "elevenlabs-audio-tags" }, "text": { "type": "null" }, "outcome": { "type": "null" }, "reason": { "type": "null" } }
+    },
+    {
+      "required": ["text"],
+      "properties": { "kind": { "const": "segment" }, "sequence": { "minimum": 1 }, "text": { "type": "string", "minLength": 1 }, "outcome": { "type": "null" }, "reason": { "type": "null" } }
+    },
+    {
+      "required": ["outcome", "text", "messageId"],
+      "properties": { "kind": { "const": "terminal" }, "sequence": { "minimum": 1 }, "outcome": { "const": "complete" }, "text": { "type": "string", "pattern": "\\S" }, "messageId": { "$ref": "#/$defs/id" }, "reason": { "type": "null" } }
+    },
+    {
+      "required": ["outcome", "reason"],
+      "properties": { "kind": { "const": "terminal" }, "sequence": { "minimum": 1 }, "outcome": { "enum": ["unavailable", "cancelled", "failed"] }, "reason": { "$ref": "#/$defs/id" }, "text": { "type": "null" } }
+    }
+  ],
+  "$defs": { "id": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "\\S" } },
+  "$comment": "Unknown optional fields are allowed. Consumers additionally enforce UTF-8 byte limits (4 KiB segment, 64 KiB complete text, 96 KiB event), ordered sequences, duplicate equality and terminal text matching committed segments. Gateway identity comes from the authenticated connection, not a caller-asserted payload."
+}

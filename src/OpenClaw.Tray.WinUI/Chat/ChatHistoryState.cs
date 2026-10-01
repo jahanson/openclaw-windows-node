@@ -29,6 +29,13 @@ internal sealed class ChatHistoryState
             ? sessionId
             : null;
 
+    internal string? ResolveSpeechSessionId(string threadId, string? snapshotId)
+    {
+        var candidate = string.IsNullOrWhiteSpace(snapshotId) ? ResolveSessionId(threadId) : snapshotId;
+        return _resetClearedSessionIds.TryGetValue(threadId, out var cleared) && candidate == cleared
+            ? null : candidate;
+    }
+
     internal IReadOnlyDictionary<string, long> SnapshotRevisions() =>
         new Dictionary<string, long>(_revisions);
 
@@ -206,12 +213,16 @@ internal sealed class ChatHistoryState
         var contentTimestamps = new Dictionary<string, List<long>>(
             StringComparer.Ordinal);
         var messageIds = new HashSet<string>(StringComparer.Ordinal);
+        var responseIds = new HashSet<string>(StringComparer.Ordinal);
         var sequenceCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var entry in rebuilt.Entries)
         {
             rebuiltMetadata.TryGetValue(entry.Id, out var metadata);
             if (!string.IsNullOrEmpty(metadata?.GatewayMessageId))
                 messageIds.Add(metadata.GatewayMessageId);
+            if (entry.Kind == ChatTimelineItemKind.Assistant &&
+                !string.IsNullOrEmpty(metadata?.ResponseId))
+                responseIds.Add(metadata.ResponseId);
             if (metadata?.OpenClawSeq is { } sequence)
                 IncrementCount(sequenceCounts, SequenceKey(entry.Kind, sequence));
             if (metadata?.Timestamp is { } timestamp && timestamp != default)
@@ -245,6 +256,15 @@ internal sealed class ChatHistoryState
             priorMetadata.TryGetValue(entry.Id, out var metadata);
             if (!string.IsNullOrEmpty(metadata?.GatewayMessageId) &&
                 messageIds.Contains(metadata.GatewayMessageId))
+            {
+                ConsumeAnyTimestamp(
+                    contentTimestamps,
+                    ContentKey(entry.Kind, entry.Text));
+                continue;
+            }
+            if (entry.Kind == ChatTimelineItemKind.Assistant &&
+                !string.IsNullOrEmpty(metadata?.ResponseId) &&
+                responseIds.Contains(metadata.ResponseId))
             {
                 ConsumeAnyTimestamp(
                     contentTimestamps,
@@ -308,6 +328,9 @@ internal sealed class ChatHistoryState
             }
             if (!string.IsNullOrEmpty(metadata?.GatewayMessageId))
                 messageIds.Add(metadata.GatewayMessageId);
+            if (entryToAdd.Kind == ChatTimelineItemKind.Assistant &&
+                !string.IsNullOrEmpty(metadata?.ResponseId))
+                responseIds.Add(metadata.ResponseId);
             if (metadata?.OpenClawSeq is { } addedSequence)
             {
                 IncrementCount(

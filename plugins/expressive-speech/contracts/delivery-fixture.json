@@ -1,0 +1,26 @@
+{
+  "expectedText": "[curious] Keep `Get-Process` exact in chat.\nI can explain it aloud. 🙂",
+  "events": [
+    {
+      "protocol": { "major": 1, "minor": 0 },
+      "identity": { "sessionKey": "agent:main:fixture", "sessionIncarnation": "physical-1", "responseId": "response-1", "renditionId": "rendition-1" },
+      "sequence": 0, "kind": "begin", "origin": "composed", "cueFormat": "elevenlabs-audio-tags"
+    },
+    {
+      "protocol": { "major": 1, "minor": 0 },
+      "identity": { "sessionKey": "agent:main:fixture", "sessionIncarnation": "physical-1", "responseId": "response-1", "renditionId": "rendition-1" },
+      "sequence": 1, "kind": "segment", "text": "[curious] Keep `Get-Process` exact in chat.\n"
+    },
+    {
+      "protocol": { "major": 1, "minor": 0 },
+      "identity": { "sessionKey": "agent:main:fixture", "sessionIncarnation": "physical-1", "responseId": "response-1", "renditionId": "rendition-1" },
+      "sequence": 2, "kind": "segment", "text": "I can explain it aloud. 🙂"
+    },
+    {
+      "protocol": { "major": 1, "minor": 0 },
+      "identity": { "sessionKey": "agent:main:fixture", "sessionIncarnation": "physical-1", "responseId": "response-1", "renditionId": "rendition-1" },
+      "sequence": 3, "kind": "terminal", "outcome": "complete", "messageId": "persisted-message-1",
+      "text": "[curious] Keep `Get-Process` exact in chat.\nI can explain it aloud. 🙂"
+    }
+  ]
+}

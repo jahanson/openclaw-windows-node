@@ -153,6 +153,11 @@ internal sealed record ChatIncomingMessageGate(
     ChatOpenedLifecycleTransition? OpenedLifecycle,
     ChatRuntimeGeneration RuntimeGeneration);
 
+internal sealed record ChatEmptyTerminalTransition(
+    string RunId,
+    bool IsError,
+    ChatDataSnapshot Snapshot);
+
 internal sealed record ChatRemoteUserBackfillTransition(
     ChatDataSnapshot Snapshot,
     ChatOpenedLifecycleTransition? OpenedLifecycle,

@@ -112,6 +112,13 @@ public record class SettingsData
     /// </summary>
     public bool NodeOllamaInferenceEnabled { get; set; } = false;
     public string TtsProvider { get; set; } = OpenClaw.Shared.Capabilities.TtsCapability.PiperProvider;
+    /// <summary>
+    /// Chat response speech provider. This is intentionally separate from
+    /// <see cref="TtsProvider"/>, which remains the node and ordinary read-aloud provider.
+    /// </summary>
+    public string ChatSpeechProvider { get; set; } = "none";
+    /// <summary>Preferred Dialog delivery mode: auto, prepared, or live.</summary>
+    public string ChatSpeechMode { get; set; } = "auto";
     /// <summary>Persisted: whether the Hub's NavigationView pane is expanded
     /// (true) or collapsed/compact (false). Default true.</summary>
     public bool HubNavPaneOpen { get; set; } = true;

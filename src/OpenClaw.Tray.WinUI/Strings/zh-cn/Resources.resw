@@ -2494,7 +2494,7 @@
     <value>语音和音频</value>
   </data>
   <data name="VoiceSettingsPage_PageDescription.Text" xml:space="preserve">
-    <value>配置语音转文字和语音交互设置。所有语音处理均在本机本地运行。</value>
+    <value>配置语音转文字和语音交互设置。本地或云端处理取决于所选提供商。</value>
   </data>
   <data name="VoiceSettingsPage_SttHeader.Text" xml:space="preserve">
     <value>语音转文字</value>
@@ -7875,4 +7875,77 @@
   <data name="AgentCreation_Description" xml:space="preserve"><value>在已连接的网关上创建智能体及其工作区。此操作不会创建会话或更改当前聊天。</value></data>
   <data name="AgentCreation_PermissionRequired" xml:space="preserve"><value>请连接具有 operator.admin 权限的网关以创建智能体。</value></data>
   <data name="AgentCreation_Failed" xml:space="preserve"><value>无法确认智能体是否创建成功。请关闭此对话框并刷新智能体列表，然后再试。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechHeader.Text" xml:space="preserve"><value>聊天回复语音</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDescription.Text" xml:space="preserve"><value>选择受支持的聊天会话如何生成富有表现力的语音。此设置不会更改节点的文本转语音提供商。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechProviderCombo.Header" xml:space="preserve"><value>提供商</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechExisting.Content" xml:space="preserve"><value>现有语音设置</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDialog.Content" xml:space="preserve"><value>ElevenLabs Dialog</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatus.Text" xml:space="preserve"><value>尚未选择 Dialog。聊天将继续使用现有语音设置。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeCombo.Header" xml:space="preserve"><value>传输偏好</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeAuto.Content" xml:space="preserve"><value>自动：仅在当前轮次支持时使用实时模式</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModePrepared.Content" xml:space="preserve"><value>生成后播放：回复就绪后使用 Eleven v4</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeLive.Content" xml:space="preserve"><value>实时对话：回复期间使用 Eleven v4 Turbo</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModelExplanation.Text" xml:space="preserve"><value>“生成后播放”使用固定的 Eleven v4 模型。“实时对话”使用固定的 Eleven v4 Turbo 模型。“自动”会在语音开始前选择模式，并在不支持实时传输时给出提示。</value></data>
+  <data name="VoiceSettingsPage_DialogApiKeyBox.Header" xml:space="preserve"><value>ElevenLabs API 密钥</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.Header" xml:space="preserve"><value>ElevenLabs 语音 ID</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.PlaceholderText" xml:space="preserve"><value>例如 21m00Tcm4TlvDq8ikWAM</value></data>
+  <data name="VoiceSettingsPage_DialogPreview.Text" xml:space="preserve"><value>试听预生成的 Dialog</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusExisting" xml:space="preserve"><value>尚未选择 Dialog。聊天将继续使用现有语音设置。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsKey" xml:space="preserve"><value>请添加 ElevenLabs API 密钥以配置 Dialog。当前聊天会话还必须报告兼容的插件和运行程序能力。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsVoice" xml:space="preserve"><value>请添加 ElevenLabs 语音 ID 以配置 Dialog。当前聊天会话还必须报告兼容的插件和运行程序能力。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusConfigured" xml:space="preserve"><value>配置已保存。当前聊天会显示插件、运行程序、提供商和所选模式是否可用。</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewButtonContent" xml:space="preserve"><value>试听预生成的 Dialog</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGenerating" xml:space="preserve"><value>正在生成试听...</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGeneratingStatus" xml:space="preserve"><value>正在生成 Eleven v4 预生成试听。试听文本将发送到 ElevenLabs。</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewBusy" xml:space="preserve"><value>语音输出正忙。请停止当前播放或稍候重试。</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewFailed" xml:space="preserve"><value>Dialog 试听失败。请检查 API 密钥、语音 ID、账户访问权限和网络连接。</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewText" xml:space="preserve"><value>[warmly] 这是您的 ElevenLabs Dialog 语音。</value></data>
+  <data name="Chat_Assistant_Action_SpeechTranscript" xml:space="preserve"><value>语音文稿</value></data>
+  <data name="Chat_Assistant_Action_ReadWritten" xml:space="preserve"><value>朗读书面回答</value></data>
+  <data name="Chat_Speech_Unavailable" xml:space="preserve"><value>此回复未存储完整的合成语音。</value></data>
+  <data name="Chat_Speech_Close" xml:space="preserve"><value>关闭</value></data>
+  <data name="Chat_Speech_StatusTitle" xml:space="preserve"><value>语音播放</value></data>
+  <data name="Chat_Speech_ReplayCost" xml:space="preserve"><value>重新播放会生成新音频，并且可能消耗提供商额度。</value></data>
+  <data name="Chat_Speech_Preparing" xml:space="preserve"><value>正在准备语音</value></data>
+  <data name="Chat_Speech_Finished" xml:space="preserve"><value>已完成</value></data>
+  <data name="Chat_Speech_Stopped" xml:space="preserve"><value>已停止</value></data>
+  <data name="Chat_Speech_Waiting" xml:space="preserve"><value>正在等待语音</value></data>
+  <data name="Chat_Speech_NotReady" xml:space="preserve"><value>不可用</value></data>
+  <data name="Chat_Speech_Buffering" xml:space="preserve"><value>正在缓冲语音</value></data>
+  <data name="Chat_Speech_Playing" xml:space="preserve"><value>正在播放语音</value></data>
+  <data name="Chat_Speech_ModeAuto" xml:space="preserve"><value>自动</value></data>
+  <data name="Chat_Speech_ModePrepared" xml:space="preserve"><value>生成后播放</value></data>
+  <data name="Chat_Speech_ModeLive" xml:space="preserve"><value>实时对话</value></data>
+  <data name="Chat_Speech_ReasonSignedAdmin" xml:space="preserve"><value>需要已授权且签名的管理员设备。</value></data>
+  <data name="Chat_Speech_ReasonPluginDisabled" xml:space="preserve"><value>网关 Dialog 插件已禁用。</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedHost" xml:space="preserve"><value>此网关版本不支持 Dialog 合成。</value></data>
+  <data name="Chat_Speech_ReasonIncompatibleVersion" xml:space="preserve"><value>网关 Dialog 协议版本不兼容。</value></data>
+  <data name="Chat_Speech_ReasonCoreTtsMustBeOff" xml:space="preserve"><value>请使用 /tts chat off 关闭此会话的网关语音，然后重新发送。</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedModel" xml:space="preserve"><value>所选模型不支持 Dialog 语音。</value></data>
+  <data name="Chat_Speech_ReasonInvalidSession" xml:space="preserve"><value>当前聊天会话不可用。</value></data>
+  <data name="Chat_Speech_ReasonModeUnavailable" xml:space="preserve"><value>请求的 Dialog 交付模式不可用。</value></data>
+  <data name="Chat_Speech_ReasonLiveUnavailable" xml:space="preserve"><value>实时交付不可用。正在使用生成后播放。</value></data>
+  <data name="Chat_Speech_ReasonIntentUnavailable" xml:space="preserve"><value>语音意图不可用。文字聊天将继续。</value></data>
+  <data name="Chat_Speech_Failed" xml:space="preserve"><value>语音失败</value></data>
+  <data name="Chat_Speech_PartialFailed" xml:space="preserve"><value>播放部分音频后语音失败</value></data>
+  <data name="Chat_Speech_PartialStopped" xml:space="preserve"><value>播放部分音频后已停止</value></data>
+  <data name="Chat_Speech_ReasonContentUnavailable" xml:space="preserve"><value>此回复没有完整的合成语音。文字聊天内容未更改。</value></data>
+  <data name="Chat_Speech_ReasonContentInvalid" xml:space="preserve"><value>合成语音不完整或格式错误。文字聊天内容未更改。</value></data>
+  <data name="Chat_Speech_ReasonContentLimit" xml:space="preserve"><value>合成语音超出安全限制。文字聊天内容未更改。</value></data>
+  <data name="Chat_Speech_ReasonSessionInvalidated" xml:space="preserve"><value>聊天会话已更改，因此语音已停止。</value></data>
+  <data name="Chat_Speech_ReasonGenerationFailed" xml:space="preserve"><value>网关无法完成合成语音。文字聊天内容未更改。</value></data>
+  <data name="Chat_Speech_ReasonEligibilityChanged" xml:space="preserve"><value>此轮对话不再支持 Dialog 语音。请检查会话设置后重试。</value></data>
+  <data name="Chat_Speech_ReasonProviderAuthentication" xml:space="preserve"><value>ElevenLabs 拒绝了 API 密钥。请检查其文本转语音权限。</value></data>
+  <data name="Chat_Speech_ReasonProviderConfiguration" xml:space="preserve"><value>请先配置 ElevenLabs API 密钥和语音，再使用 Dialog。</value></data>
+  <data name="Chat_Speech_ReasonProviderAccountRestriction" xml:space="preserve"><value>ElevenLabs 拒绝了此语音或帐户。请检查订阅和语音访问权限。</value></data>
+  <data name="Chat_Speech_ReasonProviderUnavailable" xml:space="preserve"><value>ElevenLabs 暂时不可用。请检查连接或稍后重试。</value></data>
+  <data name="Chat_Speech_ReasonProviderInvalidResponse" xml:space="preserve"><value>ElevenLabs 返回了无效音频或不受支持的响应。</value></data>
+  <data name="Chat_Speech_ReasonPlaybackBusy" xml:space="preserve"><value>另一个语音任务正在使用音频输出。请停止该任务后重试。</value></data>
+  <data name="Chat_Speech_ReasonPlaybackFailed" xml:space="preserve"><value>音频输出无法播放此语音。</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechBudget.Text" xml:space="preserve"><value>语音回复最多包含 2,000 个字符。文字回复可以更长。</value></data>
+  <data name="Chat_Speech_ReasonWrittenStreamed" xml:space="preserve"><value>使用 Eleven v4 Turbo 分小段流式朗读书面回答。段落之间可能有短暂停顿。</value></data>
+  <data name="Chat_Speech_ReasonWrittenTextLimit" xml:space="preserve"><value>书面回答超过了 10,000 字符的朗读限制，或包含无法安全拆分的过大文本单元。</value></data>
+  <data name="Chat_Speech_ReasonWrittenAudioLimit" xml:space="preserve"><value>书面回答的朗读已达到音频限制。</value></data>
+  <data name="Chat_Speech_ReasonWrittenTimeLimit" xml:space="preserve"><value>书面回答的朗读已达到 15 分钟的时间限制。</value></data>
+  <data name="Chat_Speech_ReasonWrittenInvalidText" xml:space="preserve"><value>书面回答包含无效的 Unicode 文本，无法安全朗读。</value></data>
 </root>

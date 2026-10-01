@@ -1994,6 +1994,48 @@ public class OpenClawGatewayClientTests
         Assert.Equal("no_reply", received.Text);
     }
 
+    [Theory]
+    [InlineData("reset", true)]
+    [InlineData("delete", true)]
+    [InlineData("archive", true)]
+    [InlineData("rewind", true)]
+    [InlineData("branch-switch", true)]
+    [InlineData("checkpoint-restore", true)]
+    [InlineData("patch", false)]
+    [InlineData("send", false)]
+    public void RemoteSessionChangeInvalidatesOnlyDestructiveLifecycle(string reason, bool invalidates)
+    {
+        var helper = new GatewayClientTestHelper();
+        GatewaySessionInvalidation? observed = null;
+        helper.Client.SessionInvalidating += (_, invalidation) => observed = invalidation;
+        helper.ProcessRawMessage(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            type = "event", @event = "sessions.changed",
+            payload = new { sessionKey = "main", reason }
+        }));
+        Assert.Equal(invalidates ? new GatewaySessionInvalidation("main", $"remote-session-{reason}") : null, observed);
+    }
+
+    [Theory]
+    [InlineData("sessions.reset")]
+    [InlineData("sessions.delete")]
+    [InlineData("sessions.compaction.restore")]
+    [InlineData("chat.abort")]
+    public async Task SessionMutationIntentInvalidatesBeforeAFailedSend(string method)
+    {
+        var helper = new GatewayClientTestHelper();
+        GatewaySessionInvalidation? observed = null;
+        helper.Client.SessionInvalidating += (_, invalidation) => observed = invalidation;
+        var parameters = method == "chat.abort"
+            ? (object)new { sessionKey = "main", runId = "run-1" }
+            : new { key = "main" };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.Client.SendWizardRequestAsync(method, parameters));
+        Assert.Equal(new GatewaySessionInvalidation("main", method, method == "chat.abort" ? "run-1" : null), observed);
+        observed = null;
+        Assert.False(await helper.Client.ResetSessionAsync("main"));
+        Assert.Equal(new GatewaySessionInvalidation("main", "sessions.reset"), observed);
+    }
+
     [Fact]
     public void ParseChatHistoryPayload_AssistantNoReply_DropsTranscriptEntry()
     {
@@ -2010,6 +2052,59 @@ public class OpenClawGatewayClientTests
         """);
 
         Assert.Equal(["before", "visible reply"], history.Messages.Select(m => m.Text).ToArray());
+    }
+
+    [Theory]
+    [InlineData("valid", true)]
+    [InlineData("other-session", false)]
+    [InlineData("old-incarnation", false)]
+    [InlineData("missing-receipt", false)]
+    [InlineData("wrong-role", false)]
+    [InlineData("unsupported-version", false)]
+    [InlineData("incomplete", false)]
+    [InlineData("missing-text", false)]
+    public void ParseChatHistoryPayload_SpeechIsSeparateAndBoundToCoreHistory(string scenario, bool available)
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse("""
+        {
+          "sessionId": "physical-1",
+          "messages": [{
+            "role": "assistant", "content": "Written **answer**.",
+            "__openclaw": { "id": "actual-message", "seq": 2 },
+            "openclawExpressiveSpeech": {
+              "protocol": { "major": 1, "minor": 0 },
+              "identity": { "sessionKey": "main", "sessionIncarnation": "physical-1",
+                "responseId": "run-1", "renditionId": "rendition-1" },
+              "origin": "composed", "cueFormat": "elevenlabs-audio-tags",
+              "outcome": "complete", "text": "[curious] Spoken answer.",
+              "messageId": "untrusted-metadata-id"
+            }
+          }]
+        }
+        """)!;
+        var row = node["messages"]![0]!;
+        var speech = row["openclawExpressiveSpeech"]!;
+        switch (scenario)
+        {
+            case "other-session": speech["identity"]!["sessionKey"] = "private"; break;
+            case "old-incarnation": speech["identity"]!["sessionIncarnation"] = "old"; break;
+            case "missing-receipt": row.AsObject().Remove("__openclaw"); break;
+            case "wrong-role": row["role"] = "user"; break;
+            case "unsupported-version": speech["protocol"]!["major"] = 9; break;
+            case "incomplete": speech["outcome"] = "failed"; break;
+            case "missing-text": speech.AsObject().Remove("text"); break;
+        }
+        var helper = new GatewayClientTestHelper();
+        var message = Assert.Single(helper.ParseChatHistoryPayload(node.ToJsonString()).Messages);
+        Assert.Equal("Written **answer**.", message.Text);
+        if (!available)
+        {
+            Assert.Null(message.SpeechRendition);
+            return;
+        }
+        Assert.NotNull(message.SpeechRendition);
+        Assert.Equal("actual-message", message.SpeechRendition.MessageId);
+        Assert.Equal("[curious] Spoken answer.", message.SpeechRendition.Text);
     }
 
     [Fact]

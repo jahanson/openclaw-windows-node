@@ -73,6 +73,32 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24.19.0'
+        cache: npm
+        cache-dependency-path: plugins/expressive-speech/package-lock.json
+
+    - name: Validate expressive speech plugin and compiled host artifact
+      working-directory: plugins/expressive-speech
+      shell: pwsh
+      run: |
+        npm ci
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        npm run check
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        npm test
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        npm run probe:matrix
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload verified expressive speech plugin
+      uses: actions/upload-artifact@v7
+      with:
+        name: expressive-speech-plugin
+        path: plugins/expressive-speech/artifacts/*.tgz
+        if-no-files-found: error
+
     - name: Ensure .squad stays untracked
       shell: bash
       run: |

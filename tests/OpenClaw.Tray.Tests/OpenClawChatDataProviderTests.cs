@@ -236,6 +236,7 @@ public class OpenClawChatDataProviderTests
         public event EventHandler<ConnectionStatus>? StatusChanged;
         public event EventHandler<SessionInfo[]>? SessionsUpdated;
         public event EventHandler<SessionCommandResult>? SessionCommandCompleted;
+        public event EventHandler<AgentEventInfo>? RawChatEventReceived;
         public event EventHandler<ChatMessageInfo>? ChatMessageReceived;
         public event EventHandler<AgentEventInfo>? AgentEventReceived;
         public event EventHandler<ModelsListInfo>? ModelsListUpdated;
@@ -246,6 +247,7 @@ public class OpenClawChatDataProviderTests
         public void RaiseStatus(ConnectionStatus s) { CurrentStatus = s; StatusChanged?.Invoke(this, s); }
         public void RaiseSessions(SessionInfo[] s) { Sessions = s; SessionsUpdated?.Invoke(this, s); }
         public void RaiseSessionCommandCompleted(SessionCommandResult result) => SessionCommandCompleted?.Invoke(this, result);
+        public void RaiseRawChat(AgentEventInfo e) => RawChatEventReceived?.Invoke(this, e);
         public void RaiseChat(ChatMessageInfo m) => ChatMessageReceived?.Invoke(this, m);
         public void RaiseAgent(AgentEventInfo a) => AgentEventReceived?.Invoke(this, a);
         public void RaiseModels(ModelsListInfo m) { CurrentModels = m; ModelsListUpdated?.Invoke(this, m); }
@@ -332,6 +334,27 @@ public class OpenClawChatDataProviderTests
             Data = doc.RootElement.Clone(),
             SessionKey = sessionKey,
             RunId = runId ?? string.Empty
+        };
+    }
+
+    private static AgentEventInfo MakeRawChatEvent(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var payload = doc.RootElement;
+        return new AgentEventInfo
+        {
+            Stream = payload.TryGetProperty("message", out var message) &&
+                     message.ValueKind == JsonValueKind.Object &&
+                     message.TryGetProperty("role", out var role)
+                ? role.GetString() ?? "chat"
+                : "chat",
+            Data = payload.Clone(),
+            SessionKey = payload.TryGetProperty("sessionKey", out var sessionKey)
+                ? sessionKey.GetString()
+                : null,
+            RunId = payload.TryGetProperty("runId", out var runId)
+                ? runId.GetString() ?? string.Empty
+                : string.Empty,
         };
     }
 
@@ -3353,6 +3376,66 @@ public class OpenClawChatDataProviderTests
         var entry = Assert.Single(latest.Timelines["main"].Entries);
         Assert.Equal(ChatTimelineItemKind.User, entry.Kind);
         Assert.Equal("after reset", entry.Text);
+    }
+
+    [Fact]
+    public async Task SessionResetCompletion_EmptyFinalForAcceptedSlashRun_ClosesTurnWithoutAssistant()
+    {
+        const string command = "/tts chat off";
+        const string runId = "slash-run";
+        var (bridge, provider, snapshots, notifications) =
+            CreateProvider([MainSession()]);
+        await provider.LoadAsync();
+        bridge.RaiseSessionCommandCompleted(new SessionCommandResult
+        {
+            Method = "sessions.reset",
+            Ok = true,
+            Key = "main",
+        });
+        bridge.SendResults.Enqueue(new ChatSendResult
+        {
+            RunId = runId,
+            Status = "started",
+        });
+
+        await provider.SendMessageAsync("main", command);
+        Assert.True(snapshots[^1].Timelines["main"].TurnActive);
+
+        bridge.RaiseRawChat(MakeRawChatEvent(
+            """{"sessionKey":"main","runId":"unrelated-run","state":"final"}"""));
+        bridge.RaiseRawChat(MakeRawChatEvent(JsonSerializer.Serialize(new
+        {
+            sessionKey = "main",
+            runId,
+            state = "final",
+            message = new { role = "assistant", content = "visible reply" },
+        })));
+        Assert.True(snapshots[^1].Timelines["main"].TurnActive);
+
+        var terminal = MakeRawChatEvent(JsonSerializer.Serialize(new
+        {
+            sessionKey = "main",
+            runId,
+            state = "final",
+        }));
+        bridge.RaiseRawChat(terminal);
+        bridge.RaiseRawChat(terminal);
+        bridge.RaiseChat(new ChatMessageInfo
+        {
+            SessionKey = "main",
+            Role = "user",
+            Text = command,
+            State = "final",
+        });
+
+        var timeline = snapshots[^1].Timelines["main"];
+        Assert.False(timeline.TurnActive);
+        Assert.Single(timeline.Entries, entry =>
+            entry.Kind == ChatTimelineItemKind.User && entry.Text == command);
+        Assert.DoesNotContain(timeline.Entries, entry =>
+            entry.Kind == ChatTimelineItemKind.Assistant);
+        Assert.DoesNotContain(notifications, notification =>
+            notification.Kind == ChatProviderNotificationKind.TurnComplete);
     }
 
     [Fact]
@@ -6611,6 +6694,59 @@ public class OpenClawChatDataProviderTests
         Assert.False(timeline.TurnActive);
         Assert.Contains(timeline.Entries, e =>
             e.Kind == ChatTimelineItemKind.Status && e.Text.Contains("model unreachable"));
+    }
+
+    [Fact]
+    public async Task AssistantErrorTerminalsAfterLifecycleError_DoNotReopenTheTurn()
+    {
+        using var activities = new ChatActivityCollector();
+        var (bridge, provider, _, notifications) = CreateProvider(new[] { MainSession() });
+        await provider.LoadAsync();
+
+        bridge.RaiseAgent(MakeAgentEvent("lifecycle", """{"phase":"start"}""", runId: "run-1"));
+        bridge.RaiseAgent(MakeAgentEvent("lifecycle",
+            """{"phase":"error","message":"model unreachable"}""", runId: "run-1"));
+        bridge.RaiseChat(new ChatMessageInfo
+        {
+            SessionKey = "main",
+            Role = "assistant",
+            Text = "The model request failed.",
+            State = "error",
+            OpenClawId = "error-1",
+            OpenClawSeq = 10
+        });
+        bridge.RaiseChat(new ChatMessageInfo
+        {
+            SessionKey = "main",
+            Role = "assistant",
+            Text = "Expressive speech could not process the response.",
+            State = "error",
+            OpenClawId = "error-2",
+            OpenClawSeq = 11
+        });
+        bridge.RaiseChat(new ChatMessageInfo
+        {
+            SessionKey = "main",
+            Role = "assistant",
+            Text = "Expressive speech could not process the response.",
+            State = "error",
+            OpenClawId = "error-2",
+            OpenClawSeq = 11
+        });
+
+        var timeline = (await provider.LoadAsync()).Timelines["main"];
+        Assert.False(timeline.TurnActive);
+        Assert.Null(timeline.ActiveAssistantId);
+        var errors = timeline.Entries.Where(entry => entry.Kind == ChatTimelineItemKind.Assistant).ToArray();
+        Assert.Equal(["The model request failed.", "Expressive speech could not process the response."],
+            errors.Select(entry => entry.Text));
+        Assert.All(errors, entry => Assert.False(entry.IsStreaming));
+        Assert.DoesNotContain(notifications, notification => notification.Kind == ChatProviderNotificationKind.TurnComplete);
+
+        var turn = Assert.Single(activities.Stopped,
+            activity => activity.OperationName == ChatTelemetryTracker.TurnSpanName);
+        Assert.Equal("failure", turn.GetTagItem(OpenClawTelemetryTagKey.Outcome.ToTelemetryName()));
+        Assert.Equal("lifecycle_error", turn.GetTagItem(OpenClawTelemetryTagKey.Reason.ToTelemetryName()));
     }
 
     [Fact]
@@ -11783,6 +11919,91 @@ public class OpenClawChatDataProviderTests
         // IDs must be unique even after the append step.
         var ids = timeline.Entries.Select(e => e.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task SpeechTerminalRefresh_ReconcilesLongRunningLiveAssistantByResponseIdentity()
+    {
+        var historyTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var session = MainSession();
+        session.SessionId = "physical-session";
+        var firstIdentity = new OpenClaw.Shared.Speech.SpeechRenditionIdentity(
+            "main", session.SessionId, "run-1", "rendition-1");
+        var secondIdentity = firstIdentity with { ResponseId = "run-2", RenditionId = "rendition-2" };
+        var (bridge, provider, snapshots, _) = CreateProvider([session]);
+        bridge.HistoryBehavior = _ => Task.FromResult(new ChatHistoryInfo
+        {
+            SessionKey = "main",
+            SessionId = session.SessionId,
+            Messages =
+            [
+                new ChatMessageInfo
+                {
+                    Role = "user",
+                    Text = "First request",
+                    State = "final",
+                    Ts = historyTimestamp - 1000
+                },
+                new ChatMessageInfo
+                {
+                    Role = "assistant",
+                    Text = "One authoritative answer",
+                    State = "final",
+                    Ts = historyTimestamp,
+                    SpeechRendition = new(firstIdentity, "message-1", "[curious] First spoken answer", "composed",
+                        "elevenlabs-audio-tags")
+                },
+                new ChatMessageInfo
+                {
+                    Role = "user",
+                    Text = "Second request",
+                    State = "final",
+                    Ts = historyTimestamp + 500
+                },
+                new ChatMessageInfo
+                {
+                    Role = "assistant",
+                    Text = "One authoritative answer",
+                    State = "final",
+                    Ts = historyTimestamp + 1000,
+                    SpeechRendition = new(secondIdentity, "message-2", "[curious] Second spoken answer", "composed",
+                        "elevenlabs-audio-tags")
+                }
+            ]
+        });
+        await provider.LoadAsync();
+        bridge.RaiseStatus(ConnectionStatus.Connected);
+        bridge.RaiseAgent(MakeAgentEvent("lifecycle", """{"phase":"start"}""", runId: firstIdentity.ResponseId));
+        var firstLive = MakeAgentEvent("assistant", """{"delta":"One authoritative answer"}""",
+            runId: firstIdentity.ResponseId);
+        firstLive.Ts = historyTimestamp + 10_000;
+        bridge.RaiseAgent(firstLive);
+        bridge.RaiseAgent(MakeAgentEvent("lifecycle", """{"phase":"end"}""", runId: firstIdentity.ResponseId));
+        bridge.RaiseAgent(MakeAgentEvent("lifecycle", """{"phase":"start"}""", runId: secondIdentity.ResponseId));
+        var secondLive = MakeAgentEvent("assistant", """{"delta":"One authoritative answer"}""",
+            runId: secondIdentity.ResponseId);
+        secondLive.Ts = historyTimestamp + 20_000;
+        bridge.RaiseAgent(secondLive);
+
+        var refresh = provider.CaptureSpeechHistoryRefresh(secondIdentity);
+        Assert.NotNull(refresh);
+        await refresh(default);
+        bridge.RaiseChat(new ChatMessageInfo
+        {
+            SessionKey = "main",
+            Role = "assistant",
+            Text = "One authoritative answer",
+            State = "final"
+        });
+
+        var assistants = snapshots[^1].Timelines["main"].Entries
+            .Where(entry => entry.Kind == ChatTimelineItemKind.Assistant)
+            .ToArray();
+        Assert.Equal(2, assistants.Length);
+        Assert.All(assistants, entry => Assert.Equal("One authoritative answer", entry.Text));
+        Assert.Equal(new[] { firstIdentity, secondIdentity }, assistants
+            .Select(entry => provider.GetEntryMetadata("main")[entry.Id].SpeechRendition?.Identity)
+            .ToArray());
     }
 
     [Fact]

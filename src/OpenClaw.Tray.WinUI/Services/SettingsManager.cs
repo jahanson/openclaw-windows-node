@@ -27,6 +27,11 @@ public class SettingsManager
     public const string AppThemeSystem = "System";
     public const string AppThemeLight = "Light";
     public const string AppThemeDark = "Dark";
+    public const string ChatSpeechProviderExisting = "none";
+    public const string ChatSpeechProviderElevenLabsDialog = "elevenlabs-dialog";
+    public const string ChatSpeechModeAuto = "auto";
+    public const string ChatSpeechModePrepared = "prepared";
+    public const string ChatSpeechModeLive = "live";
 
     public static string SettingsDirectoryPath => GetDefaultSettingsDirectory();
     public static string SettingsPath => Path.Combine(SettingsDirectoryPath, "settings.json");
@@ -147,6 +152,8 @@ public class SettingsManager
     /// </summary>
     public bool NodeOllamaInferenceEnabled { get => _data.NodeOllamaInferenceEnabled; set => _data = _data with { NodeOllamaInferenceEnabled = value }; }
     public string TtsProvider { get => string.IsNullOrWhiteSpace(_data.TtsProvider) ? TtsCapability.PiperProvider : _data.TtsProvider; set => _data = _data with { TtsProvider = value }; }
+    public string ChatSpeechProvider { get => NormalizeChatSpeechProvider(_data.ChatSpeechProvider); set => _data = _data with { ChatSpeechProvider = NormalizeChatSpeechProvider(value) }; }
+    public string ChatSpeechMode { get => NormalizeChatSpeechMode(_data.ChatSpeechMode); set => _data = _data with { ChatSpeechMode = NormalizeChatSpeechMode(value) }; }
     public string TtsElevenLabsApiKey { get => _data.TtsElevenLabsApiKey ?? ""; set => _data = _data with { TtsElevenLabsApiKey = value }; }
     public string TtsElevenLabsModel { get => _data.TtsElevenLabsModel ?? ""; set => _data = _data with { TtsElevenLabsModel = value }; }
     public string TtsElevenLabsVoiceId { get => _data.TtsElevenLabsVoiceId ?? ""; set => _data = _data with { TtsElevenLabsVoiceId = value }; }
@@ -311,6 +318,8 @@ public class SettingsManager
         NodeTtsEnabled = false,
         NodeOllamaInferenceEnabled = false,
         TtsProvider = TtsCapability.PiperProvider,
+        ChatSpeechProvider = ChatSpeechProviderExisting,
+        ChatSpeechMode = ChatSpeechModeAuto,
         TtsElevenLabsApiKey = "",
         TtsElevenLabsModel = "",
         TtsElevenLabsVoiceId = "",
@@ -356,6 +365,8 @@ public class SettingsManager
             SttModelName = string.IsNullOrWhiteSpace(loaded.SttModelName) ? defaults.SttModelName : loaded.SttModelName,
             SttSilenceTimeout = loaded.SttSilenceTimeout > 0 ? loaded.SttSilenceTimeout : defaults.SttSilenceTimeout,
             TtsProvider = string.IsNullOrWhiteSpace(loaded.TtsProvider) ? defaults.TtsProvider : loaded.TtsProvider,
+            ChatSpeechProvider = NormalizeChatSpeechProvider(loaded.ChatSpeechProvider),
+            ChatSpeechMode = NormalizeChatSpeechMode(loaded.ChatSpeechMode),
             TtsElevenLabsApiKey = UnprotectSettingSecret(loaded.TtsElevenLabsApiKey) ?? defaults.TtsElevenLabsApiKey,
             TtsElevenLabsModel = loaded.TtsElevenLabsModel ?? defaults.TtsElevenLabsModel,
             TtsElevenLabsVoiceId = loaded.TtsElevenLabsVoiceId ?? defaults.TtsElevenLabsVoiceId,
@@ -450,6 +461,8 @@ public class SettingsManager
         SttModelName = SttModelName,
         SttSilenceTimeout = SttSilenceTimeout,
         TtsProvider = TtsProvider,
+        ChatSpeechProvider = ChatSpeechProvider,
+        ChatSpeechMode = ChatSpeechMode,
         TtsElevenLabsApiKey = TtsElevenLabsApiKey,
         TtsElevenLabsModel = string.IsNullOrWhiteSpace(TtsElevenLabsModel) ? null : TtsElevenLabsModel,
         TtsElevenLabsVoiceId = string.IsNullOrWhiteSpace(TtsElevenLabsVoiceId) ? null : TtsElevenLabsVoiceId,
@@ -481,6 +494,26 @@ public class SettingsManager
             return AppThemeDark;
         return AppThemeSystem;
     }
+
+    public static string NormalizeChatSpeechProvider(string? value) =>
+        string.Equals(value, ChatSpeechProviderElevenLabsDialog, StringComparison.OrdinalIgnoreCase)
+            ? ChatSpeechProviderElevenLabsDialog
+            : ChatSpeechProviderExisting;
+
+    public static string NormalizeChatSpeechMode(string? value)
+    {
+        if (string.Equals(value, ChatSpeechModePrepared, StringComparison.OrdinalIgnoreCase))
+            return ChatSpeechModePrepared;
+        if (string.Equals(value, ChatSpeechModeLive, StringComparison.OrdinalIgnoreCase))
+            return ChatSpeechModeLive;
+        return ChatSpeechModeAuto;
+    }
+
+    public void SaveChatSpeechProvider(string provider) =>
+        UpdateAndSave(() => ChatSpeechProvider = provider);
+
+    public void SaveChatSpeechMode(string mode) =>
+        UpdateAndSave(() => ChatSpeechMode = mode);
 
     private static string? NormalizeOptionalString(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

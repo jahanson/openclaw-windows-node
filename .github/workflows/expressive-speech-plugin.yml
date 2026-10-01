@@ -1,0 +1,40 @@
+name: Expressive Speech Plugin (Linux)
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/expressive-speech/**'
+      - '.github/workflows/expressive-speech-plugin.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'plugins/expressive-speech/**'
+      - '.github/workflows/expressive-speech-plugin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: plugins/expressive-speech
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: plugins/expressive-speech/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run probe:matrix
+      - uses: actions/upload-artifact@v7
+        with:
+          name: expressive-speech-plugin-linux
+          path: plugins/expressive-speech/artifacts/*.tgz
+          if-no-files-found: error

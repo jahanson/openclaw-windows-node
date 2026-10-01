@@ -1,0 +1,6 @@
+{
+  "name": "expressive-speech-probe",
+  "version": "0.0.0",
+  "type": "module",
+  "openclaw": { "extensions": ["./index.mjs"] }
+}

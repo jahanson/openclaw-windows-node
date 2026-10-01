@@ -2495,7 +2495,7 @@ Gebruik een van deze opties:
     <value>Spraak en audio</value>
   </data>
   <data name="VoiceSettingsPage_PageDescription.Text" xml:space="preserve">
-    <value>Configureer spraak-naar-tekst en spraakinteractie-instellingen. Alle spraakverwerking draait lokaal op uw apparaat.</value>
+    <value>Configureer spraak-naar-tekst en spraakinteractie-instellingen. Lokale of cloudverwerking hangt af van de geselecteerde provider.</value>
   </data>
   <data name="VoiceSettingsPage_SttHeader.Text" xml:space="preserve">
     <value>Spraak-naar-tekst</value>
@@ -7876,4 +7876,77 @@ Uw instellingen, gateway, bestanden en modellen blijven op hun plaats.</value>
   <data name="AgentCreation_Description" xml:space="preserve"><value>Maak een agent en werkruimte op de verbonden gateway. Dit maakt geen gesprek en wijzigt uw huidige chat niet.</value></data>
   <data name="AgentCreation_PermissionRequired" xml:space="preserve"><value>Maak verbinding met een gateway met operator.admin-machtiging om een agent te maken.</value></data>
   <data name="AgentCreation_Failed" xml:space="preserve"><value>Het maken van de agent kon niet worden bevestigd. Sluit dit dialoogvenster en vernieuw de agents voordat u het opnieuw probeert.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechHeader.Text" xml:space="preserve"><value>Spraak voor chatantwoorden</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDescription.Text" xml:space="preserve"><value>Kies hoe ondersteunde chatsessies expressieve spraak produceren. Dit wijzigt de tekst-naar-spraakprovider van het knooppunt niet.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechProviderCombo.Header" xml:space="preserve"><value>Aanbieder</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechExisting.Content" xml:space="preserve"><value>Bestaande spraakinstellingen</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDialog.Content" xml:space="preserve"><value>ElevenLabs Dialog</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatus.Text" xml:space="preserve"><value>Dialog is niet geselecteerd. De chat blijft de bestaande spraakinstellingen gebruiken.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeCombo.Header" xml:space="preserve"><value>Voorkeur voor levering</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeAuto.Content" xml:space="preserve"><value>Automatisch: alleen live als de actieve beurt dit ondersteunt</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModePrepared.Content" xml:space="preserve"><value>Eerst genereren, dan afspelen: Eleven v4 nadat het antwoord gereed is</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeLive.Content" xml:space="preserve"><value>Livegesprek: Eleven v4 Turbo tijdens het antwoord</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModelExplanation.Text" xml:space="preserve"><value>Eerst genereren, dan afspelen gebruikt het vaste Eleven v4-model. Livegesprek gebruikt het vaste Eleven v4 Turbo-model. Automatisch kiest voordat de spraak begint en meldt wanneer livelevering niet wordt ondersteund.</value></data>
+  <data name="VoiceSettingsPage_DialogApiKeyBox.Header" xml:space="preserve"><value>ElevenLabs-API-sleutel</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.Header" xml:space="preserve"><value>ElevenLabs-stem-ID</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.PlaceholderText" xml:space="preserve"><value>bijv. 21m00Tcm4TlvDq8ikWAM</value></data>
+  <data name="VoiceSettingsPage_DialogPreview.Text" xml:space="preserve"><value>Voorbeeld van voorbereide Dialog afspelen</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusExisting" xml:space="preserve"><value>Dialog is niet geselecteerd. De chat blijft de bestaande spraakinstellingen gebruiken.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsKey" xml:space="preserve"><value>Voeg een ElevenLabs-API-sleutel toe om Dialog te configureren. De actieve chatsessie moet ook compatibele plugin- en runnerfuncties melden.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsVoice" xml:space="preserve"><value>Voeg een ElevenLabs-stem-ID toe om Dialog te configureren. De actieve chatsessie moet ook compatibele plugin- en runnerfuncties melden.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusConfigured" xml:space="preserve"><value>Configuratie opgeslagen. De actieve chat toont of de plugin, runner, provider en geselecteerde modus beschikbaar zijn.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewButtonContent" xml:space="preserve"><value>Voorbeeld van voorbereide Dialog afspelen</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGenerating" xml:space="preserve"><value>Voorbeeld genereren...</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGeneratingStatus" xml:space="preserve"><value>Er wordt een voorbereid Eleven v4-voorbeeld gegenereerd. De voorbeeldtekst wordt naar ElevenLabs verzonden.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewBusy" xml:space="preserve"><value>De spraakuitvoer is bezet. Stop de huidige weergave of wacht en probeer het opnieuw.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewFailed" xml:space="preserve"><value>Het Dialog-voorbeeld is mislukt. Controleer de API-sleutel, het stem-ID, de accounttoegang en de netwerkverbinding.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewText" xml:space="preserve"><value>[warmly] Dit is uw ElevenLabs Dialog-stem.</value></data>
+  <data name="Chat_Assistant_Action_SpeechTranscript" xml:space="preserve"><value>Spraaktranscript</value></data>
+  <data name="Chat_Assistant_Action_ReadWritten" xml:space="preserve"><value>Geschreven antwoord voorlezen</value></data>
+  <data name="Chat_Speech_Unavailable" xml:space="preserve"><value>Er is geen volledige samengestelde spraak voor dit antwoord opgeslagen.</value></data>
+  <data name="Chat_Speech_Close" xml:space="preserve"><value>Sluiten</value></data>
+  <data name="Chat_Speech_StatusTitle" xml:space="preserve"><value>Spraak afspelen</value></data>
+  <data name="Chat_Speech_ReplayCost" xml:space="preserve"><value>Opnieuw afspelen genereert nieuwe audio en kan providertegoed gebruiken.</value></data>
+  <data name="Chat_Speech_Preparing" xml:space="preserve"><value>Spraak voorbereiden</value></data>
+  <data name="Chat_Speech_Finished" xml:space="preserve"><value>Voltooid</value></data>
+  <data name="Chat_Speech_Stopped" xml:space="preserve"><value>Gestopt</value></data>
+  <data name="Chat_Speech_Waiting" xml:space="preserve"><value>Wachten op spraak</value></data>
+  <data name="Chat_Speech_NotReady" xml:space="preserve"><value>Niet beschikbaar</value></data>
+  <data name="Chat_Speech_Buffering" xml:space="preserve"><value>Spraak bufferen</value></data>
+  <data name="Chat_Speech_Playing" xml:space="preserve"><value>Spraak afspelen</value></data>
+  <data name="Chat_Speech_ModeAuto" xml:space="preserve"><value>Automatisch</value></data>
+  <data name="Chat_Speech_ModePrepared" xml:space="preserve"><value>Genereren en afspelen</value></data>
+  <data name="Chat_Speech_ModeLive" xml:space="preserve"><value>Livegesprek</value></data>
+  <data name="Chat_Speech_ReasonSignedAdmin" xml:space="preserve"><value>Een geautoriseerd, ondertekend beheerdersapparaat is vereist.</value></data>
+  <data name="Chat_Speech_ReasonPluginDisabled" xml:space="preserve"><value>De Dialog-plugin van de gateway is uitgeschakeld.</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedHost" xml:space="preserve"><value>Deze gatewayversie ondersteunt Dialog-compositie niet.</value></data>
+  <data name="Chat_Speech_ReasonIncompatibleVersion" xml:space="preserve"><value>De versie van het Dialog-protocol van de gateway is niet compatibel.</value></data>
+  <data name="Chat_Speech_ReasonCoreTtsMustBeOff" xml:space="preserve"><value>Schakel Gateway-spraak voor deze sessie uit met /tts chat off en verstuur het bericht opnieuw.</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedModel" xml:space="preserve"><value>Het geselecteerde model ondersteunt Dialog-spraak niet.</value></data>
+  <data name="Chat_Speech_ReasonInvalidSession" xml:space="preserve"><value>De actieve chatsessie is niet beschikbaar.</value></data>
+  <data name="Chat_Speech_ReasonModeUnavailable" xml:space="preserve"><value>De gevraagde Dialog-leveringsmodus is niet beschikbaar.</value></data>
+  <data name="Chat_Speech_ReasonLiveUnavailable" xml:space="preserve"><value>Livelevering is niet beschikbaar. Genereren en afspelen wordt gebruikt.</value></data>
+  <data name="Chat_Speech_ReasonIntentUnavailable" xml:space="preserve"><value>Spraakintentie is niet beschikbaar. Geschreven chat gaat door.</value></data>
+  <data name="Chat_Speech_Failed" xml:space="preserve"><value>Spraak is mislukt</value></data>
+  <data name="Chat_Speech_PartialFailed" xml:space="preserve"><value>Spraak is mislukt nadat een deel van de audio is afgespeeld</value></data>
+  <data name="Chat_Speech_PartialStopped" xml:space="preserve"><value>Gestopt nadat een deel van de audio is afgespeeld</value></data>
+  <data name="Chat_Speech_ReasonContentUnavailable" xml:space="preserve"><value>Dit antwoord heeft geen volledige samengestelde spraak. De geschreven chat blijft ongewijzigd.</value></data>
+  <data name="Chat_Speech_ReasonContentInvalid" xml:space="preserve"><value>De samengestelde spraak was onvolledig of ongeldig. De geschreven chat blijft ongewijzigd.</value></data>
+  <data name="Chat_Speech_ReasonContentLimit" xml:space="preserve"><value>De samengestelde spraak heeft een veiligheidslimiet overschreden. De geschreven chat blijft ongewijzigd.</value></data>
+  <data name="Chat_Speech_ReasonSessionInvalidated" xml:space="preserve"><value>De chatsessie is gewijzigd, waardoor de spraak is gestopt.</value></data>
+  <data name="Chat_Speech_ReasonGenerationFailed" xml:space="preserve"><value>De Gateway kon de samengestelde spraak niet voltooien. De geschreven chat blijft ongewijzigd.</value></data>
+  <data name="Chat_Speech_ReasonEligibilityChanged" xml:space="preserve"><value>Deze beurt ondersteunt Dialog-spraak niet meer. Controleer de sessie-instellingen en probeer het opnieuw.</value></data>
+  <data name="Chat_Speech_ReasonProviderAuthentication" xml:space="preserve"><value>ElevenLabs heeft de API-sleutel geweigerd. Controleer de machtiging voor tekst-naar-spraak.</value></data>
+  <data name="Chat_Speech_ReasonProviderConfiguration" xml:space="preserve"><value>Configureer de ElevenLabs-API-sleutel en stem voordat u Dialog gebruikt.</value></data>
+  <data name="Chat_Speech_ReasonProviderAccountRestriction" xml:space="preserve"><value>ElevenLabs heeft deze stem of dit account geweigerd. Controleer het abonnement en de stemtoegang.</value></data>
+  <data name="Chat_Speech_ReasonProviderUnavailable" xml:space="preserve"><value>ElevenLabs is tijdelijk niet beschikbaar. Controleer de verbinding of probeer het later opnieuw.</value></data>
+  <data name="Chat_Speech_ReasonProviderInvalidResponse" xml:space="preserve"><value>ElevenLabs heeft ongeldige audio of een niet-ondersteund antwoord geretourneerd.</value></data>
+  <data name="Chat_Speech_ReasonPlaybackBusy" xml:space="preserve"><value>Een andere spraaktaak gebruikt de audio-uitvoer. Stop deze en probeer het opnieuw.</value></data>
+  <data name="Chat_Speech_ReasonPlaybackFailed" xml:space="preserve"><value>De audio-uitvoer kon deze spraak niet afspelen.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechBudget.Text" xml:space="preserve"><value>Gesproken antwoorden zijn beperkt tot 2.000 tekens. Het geschreven antwoord mag langer zijn.</value></data>
+  <data name="Chat_Speech_ReasonWrittenStreamed" xml:space="preserve"><value>Het geschreven antwoord wordt in kleine gedeelten gestreamd met Eleven v4 Turbo. Korte pauzes zijn mogelijk.</value></data>
+  <data name="Chat_Speech_ReasonWrittenTextLimit" xml:space="preserve"><value>Het geschreven antwoord overschrijdt de leeslimiet van 10.000 tekens of bevat een teksteenheid die niet veilig kan worden gesplitst.</value></data>
+  <data name="Chat_Speech_ReasonWrittenAudioLimit" xml:space="preserve"><value>Het voorlezen van het geschreven antwoord heeft de audiolimiet bereikt.</value></data>
+  <data name="Chat_Speech_ReasonWrittenTimeLimit" xml:space="preserve"><value>Het voorlezen van het geschreven antwoord heeft de tijdslimiet van 15 minuten bereikt.</value></data>
+  <data name="Chat_Speech_ReasonWrittenInvalidText" xml:space="preserve"><value>Het geschreven antwoord bevat ongeldige Unicode-tekst en kan niet veilig worden voorgelezen.</value></data>
 </root>

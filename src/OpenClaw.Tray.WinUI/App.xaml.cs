@@ -131,10 +131,17 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
     public OpenClawTray.Chat.OpenClawChatDataProvider? ChatProvider => _chatCoordinator?.Provider;
     private volatile bool _hubNativeChatSurfaceActive;
     private volatile bool _trayNativeChatSurfaceActive;
+    private readonly OpenClawTray.Chat.ChatSpeechSurfaceSelection _chatSpeechSurfaces = new();
     internal bool IsNativeChatSurfaceActive => _hubNativeChatSurfaceActive || _trayNativeChatSurfaceActive;
 
-    internal void SetHubNativeChatSurfaceActive(bool active) => _hubNativeChatSurfaceActive = active;
-    internal void SetTrayNativeChatSurfaceActive(bool active) => _trayNativeChatSurfaceActive = active;
+    internal void SetHubNativeChatSurfaceActive(bool active)
+    {
+        _hubNativeChatSurfaceActive = active;
+    }
+    internal void SetTrayNativeChatSurfaceActive(bool active)
+    {
+        _trayNativeChatSurfaceActive = active;
+    }
 
     /// <summary>
     /// Raised after the tray-wide settings have been saved (either via the
@@ -2294,7 +2301,7 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
             var concreteClient = client as OpenClawGatewayClient;
             if (concreteClient == null)
                 Logger.Warn("[ConnMgr] NewClient is not OpenClawGatewayClient — chat coordinator disabled");
-            _chatCoordinator?.SetOperatorClient(concreteClient);
+            _chatCoordinator?.SetOperatorClient(concreteClient, _gatewayRegistry?.GetActive()?.Id);
         }
         else
         {
@@ -3077,7 +3084,7 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
             // }
 
             // TTS: read response aloud whenever chat TTS is enabled and ready (any chat surface).
-            if (SpeechSetupReadiness.IsAutomaticChatTtsEnabled(_settings))
+            if (_settings?.ChatSpeechProvider != "elevenlabs-dialog" && SpeechSetupReadiness.IsAutomaticChatTtsEnabled(_settings))
             {
                 _ = (_chatCoordinator?.SpeakResponseAsync(speechText) ?? Task.CompletedTask);
             }
@@ -4309,6 +4316,19 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
 
     public Task SpeakChatTextAsync(string text) =>
         _chatCoordinator?.SpeakChatTextAsync(text) ?? Task.CompletedTask;
+
+    public void SelectChatSpeechSession(string? sessionKey) => _chatCoordinator?.SelectSpeechSession(sessionKey);
+    public void UpdateChatSpeechSurface(object surface, string? sessionKey, bool active, bool claimForeground = false) =>
+        _chatCoordinator?.SelectSpeechSession(_chatSpeechSurfaces.Update(surface, sessionKey, active, claimForeground));
+    public OpenClawTray.Chat.ChatSpeechAttemptOwner? ChatSpeechState => _chatCoordinator?.DialogSpeech;
+
+    public Task<OpenClawTray.Chat.SpeechAttemptResult> ReplayChatSpeechAsync(OpenClaw.Shared.Speech.SpeechRendition rendition) =>
+        _chatCoordinator?.ReplayRenditionAsync(rendition)
+        ?? Task.FromResult(new OpenClawTray.Chat.SpeechAttemptResult(OpenClawTray.Chat.SpeechAttemptOutcome.Skipped, "Dialog is unavailable."));
+
+    public Task<OpenClawTray.Chat.SpeechAttemptResult> ReadWrittenChatAnswerAsync(string sessionKey, string entryId, string text) =>
+        _chatCoordinator?.ReadWrittenAnswerAsync(sessionKey, entryId, text)
+        ?? Task.FromResult(new OpenClawTray.Chat.SpeechAttemptResult(OpenClawTray.Chat.SpeechAttemptOutcome.Skipped, "Dialog is unavailable."));
 
     public void StopChatSpeaking() => _chatCoordinator?.StopSpeaking();
 

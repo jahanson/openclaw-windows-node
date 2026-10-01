@@ -76,6 +76,18 @@ $allProductLanes = @(
 )
 $cases = @(
     @{
+        Scenario = "Expressive speech Gateway and consumer contract"
+        Paths = @("plugins/expressive-speech/src/index.ts", "plugins/expressive-speech/contracts/delivery-event.schema.json")
+        Classification = "targeted"
+        Required = @("core_tests", "tray_tests")
+    },
+    @{
+        Scenario = "Expressive speech package infrastructure"
+        Paths = @("plugins/expressive-speech/package.json")
+        Classification = "full"
+        Required = $fullPrLanes
+    },
+    @{
         Scenario = "MSIX allocation baseline"
         Paths = @(".github/msix-version-baseline.json")
         Classification = "full"

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using OpenClaw.Shared;
 using OpenClaw.Shared.Capabilities;
+using OpenClaw.Shared.Speech;
 using OpenClawTray.Services;
 
 namespace OpenClawTray.Chat;
@@ -20,8 +21,20 @@ public sealed class OpenClawChatCoordinator : IDisposable
     private TextToSpeechService? _fallbackTextToSpeech;
     private string? _lastManualSpeechText;
     private DateTimeOffset _lastManualSpeechAt;
-    private int _ttsMuteCount;
+    private readonly object _microphoneGate = new();
+    private readonly Dictionary<VoiceService, int> _microphoneMutes = [];
     private bool _disposed;
+    private readonly ElevenLabsDialogClient _dialogClient = new();
+    private readonly WasapiPcmPlayback _dialogPlayback = new();
+    public ChatSpeechAttemptOwner DialogSpeech { get; }
+    private ChatSpeechDelivery? _speechDelivery;
+    private string _speechGatewayId = "";
+    private string? _selectedSpeechSession;
+    public event EventHandler? SpeechStatusChanged
+    {
+        add => DialogSpeech.StatusChanged += value;
+        remove => DialogSpeech.StatusChanged -= value;
+    }
 
     /// <summary>
     /// When true, all TTS playback (manual Read Aloud and auto-response speech) is suppressed.
@@ -35,10 +48,12 @@ public sealed class OpenClawChatCoordinator : IDisposable
         set
         {
             _isMuted = value;
-            if (value)
+            DialogSpeech.SetAutomaticMuted(value);
+            if (value && !DialogSpeech.IsManualPlaybackActive) _speechDelivery?.Invalidate(null, "muted");
+            if (value && !DialogSpeech.IsManualPlaybackActive)
             {
                 // Stop any currently playing speech immediately
-                try { (_nodeServiceAccessor()?.TextToSpeech ?? GetFallbackTextToSpeechService()).StopSpeaking(); }
+                try { SpeechPlaybackArbiter.Shared.Stop(SpeechCaller.Chat); }
                 catch (Exception ex) { _logger.Debug($"OpenClawChatCoordinator: StopSpeaking during mute failed: {ex.Message}"); }
             }
         }
@@ -54,6 +69,7 @@ public sealed class OpenClawChatCoordinator : IDisposable
         _nodeServiceAccessor = nodeServiceAccessor ?? throw new ArgumentNullException(nameof(nodeServiceAccessor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _post = post;
+        DialogSpeech = new ChatSpeechAttemptOwner(PlayDialogAsync, AcquireMicrophoneMute, SpeechPlaybackArbiter.Shared);
     }
 
     public OpenClawChatDataProvider? Provider
@@ -67,8 +83,10 @@ public sealed class OpenClawChatCoordinator : IDisposable
         }
     }
 
-    public void SetOperatorClient(OpenClawGatewayClient? client)
+    public void SetOperatorClient(OpenClawGatewayClient? client, string? gatewayId = null)
     {
+        DialogSpeech.SetAvailable(false);
+        DialogSpeech.SetForeground(null);
         OpenClawChatDataProvider? oldProvider;
 
         lock (_gate)
@@ -76,6 +94,7 @@ public sealed class OpenClawChatCoordinator : IDisposable
             if (_disposed) return;
             oldProvider = _provider;
             _provider = null;
+            _speechDelivery = null;
         }
 
         oldProvider?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -86,6 +105,16 @@ public sealed class OpenClawChatCoordinator : IDisposable
         }
 
         var newProvider = new OpenClawChatDataProvider(new GatewayClientChatBridge(client), _post);
+        _speechGatewayId = gatewayId ?? Guid.NewGuid().ToString("N");
+        var boundGatewayId = _speechGatewayId;
+        var speech = new ChatSpeechDelivery(() => new SpeechGatewayTransport(client),
+            key => newProvider.ResolveSpeechSession(boundGatewayId, key),
+            () => _settings.ChatSpeechProvider == "elevenlabs-dialog" && SpeechSetupReadiness.IsAutomaticChatTtsEnabled(_settings) && !IsMuted &&
+                !string.IsNullOrWhiteSpace(_settings.TtsElevenLabsApiKey) && !string.IsNullOrWhiteSpace(_settings.TtsElevenLabsVoiceId),
+            () => _settings.ChatSpeechMode, DialogSpeech, newProvider.ReauthorizeSpeechAsync, newProvider.CaptureSpeechHistoryRefresh,
+            () => _settings.NodeTtsEnabled && _settings.ChatSpeechProvider == "elevenlabs-dialog");
+        newProvider.AttachSpeechDelivery(speech);
+        speech.SelectForeground(_selectedSpeechSession);
         lock (_gate)
         {
             if (_disposed)
@@ -95,6 +124,7 @@ public sealed class OpenClawChatCoordinator : IDisposable
             }
 
             _provider = newProvider;
+            _speechDelivery = speech;
         }
     }
 
@@ -112,27 +142,60 @@ public sealed class OpenClawChatCoordinator : IDisposable
     /// <summary>Stops any currently playing TTS audio immediately.</summary>
     public void StopSpeaking()
     {
-        try { (_nodeServiceAccessor()?.TextToSpeech ?? GetFallbackTextToSpeechService()).StopSpeaking(); }
+        _speechDelivery?.Invalidate(null, "stopped");
+        DialogSpeech.Invalidate("stopped");
+        try { SpeechPlaybackArbiter.Shared.Stop(SpeechCaller.Chat); }
         catch (Exception ex) { _logger.Debug($"OpenClawChatCoordinator.StopSpeaking failed: {ex.Message}"); }
     }
 
     public Task SpeakResponseAsync(string text) => SpeakConfiguredTextAsync(text, muteVoiceCapture: true, bypassMute: false);
 
+    public void SelectSpeechSession(string? sessionKey)
+    {
+        _selectedSpeechSession = sessionKey;
+        _speechDelivery?.SelectForeground(sessionKey);
+    }
+
+    public Task<SpeechAttemptResult> ReplayRenditionAsync(SpeechRendition rendition, CancellationToken cancellationToken = default) =>
+        _settings.NodeTtsEnabled && _settings.ChatSpeechProvider == "elevenlabs-dialog" && _speechDelivery is { } speech
+            ? speech.ReplayAsync(rendition, cancellationToken)
+            : Task.FromResult(new SpeechAttemptResult(SpeechAttemptOutcome.Skipped, "ElevenLabs Dialog is not enabled."));
+
+    public async Task<SpeechAttemptResult> ReadWrittenAnswerAsync(string sessionKey, string entryId, string text,
+        CancellationToken cancellationToken = default)
+    {
+        var provider = _provider;
+        var delivery = _speechDelivery;
+        if (!_settings.NodeTtsEnabled || _settings.ChatSpeechProvider != "elevenlabs-dialog" || provider is null || delivery is null)
+            return new(SpeechAttemptOutcome.Skipped, "ElevenLabs Dialog is not enabled.");
+        var authorizedText = await provider.ReauthorizeWrittenSpeechAsync(sessionKey, entryId, cancellationToken).ConfigureAwait(false);
+        var identity = provider.ResolveSpeechSession(_speechGatewayId, sessionKey);
+        if (identity is null || authorizedText is null || !ReferenceEquals(provider, _provider))
+            return new(SpeechAttemptOutcome.Skipped, "This session is unavailable or the gateway did not authorize the answer.");
+        var rendition = new SpeechRendition(new(sessionKey, identity.SessionIncarnation,
+            Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N")), entryId,
+            SanitizeForSpeech(authorizedText), "written-fallback", "elevenlabs-audio-tags");
+        return await delivery.PlayAuthorizedWrittenAsync(rendition, cancellationToken).ConfigureAwait(false);
+    }
+
+    public void RefreshSpeechSettings()
+    {
+        if (!_settings.NodeTtsEnabled || _settings.ChatSpeechProvider != "elevenlabs-dialog")
+        {
+            _speechDelivery?.Invalidate(null, "disabled");
+            DialogSpeech.SetAvailable(false);
+        }
+        else if (!_settings.VoiceTtsEnabled && !DialogSpeech.IsManualPlaybackActive)
+            _speechDelivery?.Invalidate(null, "automatic-speech-disabled");
+    }
+
     private async Task SpeakConfiguredTextAsync(string text, bool muteVoiceCapture, bool bypassMute = false)
     {
         if (!bypassMute && IsMuted) return;
-        var voiceService = _nodeServiceAccessor()?.VoiceService;
-        var mutedVoiceCapture = false;
+        using var microphone = muteVoiceCapture ? AcquireMicrophoneMute() : null;
 
         try
         {
-            if (muteVoiceCapture && voiceService is not null)
-            {
-                Interlocked.Increment(ref _ttsMuteCount);
-                mutedVoiceCapture = true;
-                voiceService.IsMutedForPlayback = true;
-            }
-
             var speakText = SanitizeForSpeech(text);
             if (string.IsNullOrWhiteSpace(speakText)) return;
             var speakArgs = new TtsSpeakArgs
@@ -146,22 +209,11 @@ public sealed class OpenClawChatCoordinator : IDisposable
 
             var ttsService = _nodeServiceAccessor()?.TextToSpeech
                 ?? GetFallbackTextToSpeechService();
-            await ttsService.SpeakAsync(speakArgs).ConfigureAwait(false);
+            await ttsService.SpeakAsync(speakArgs, SpeechCaller.Chat).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.Warn($"TTS response playback failed: {ex.Message}");
-        }
-        finally
-        {
-            if (mutedVoiceCapture && voiceService is not null)
-            {
-                await Task.Delay(300).ConfigureAwait(false);
-                if (Interlocked.Decrement(ref _ttsMuteCount) <= 0)
-                {
-                    voiceService.IsMutedForPlayback = false;
-                }
-            }
         }
     }
 
@@ -172,6 +224,63 @@ public sealed class OpenClawChatCoordinator : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             return _fallbackTextToSpeech ??= new TextToSpeechService(_logger, _settings);
         }
+    }
+
+    private async Task PlayDialogAsync(SpeechPlaybackRequest work, CancellationToken cancellationToken)
+    {
+        var request = new ElevenLabsDialogRequest
+        {
+            ApiKey = _settings.TtsElevenLabsApiKey ?? "",
+            VoiceId = _settings.TtsElevenLabsVoiceId ?? "",
+            CueFormat = work.Attempt.CueFormat
+        };
+        if (work.Attempt.Origin == "written-fallback"
+            && work.PreparedText is { } written && WrittenAnswerSpeechPlayback.RequiresStreaming(written))
+        {
+            await new WrittenAnswerSpeechPlayback(_dialogClient, _dialogPlayback)
+                .PlayAsync(request, written, cancellationToken, work.ReportPhase).ConfigureAwait(false);
+        }
+        else if (work.LiveText is { } live)
+        {
+            await _dialogPlayback.PlayAsync(ElevenLabsDialogClient.AudioFormat,
+                (write, token) => _dialogClient.StreamAsync(request, live, write, token), cancellationToken, work.ReportPhase).ConfigureAwait(false);
+        }
+        else
+        {
+            var audio = await _dialogClient.GeneratePreparedAsync(request, work.PreparedText ?? "", cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            await _dialogPlayback.PlayAsync(audio.Format,
+                async (write, token) => await write(audio.AudioBytes, token).ConfigureAwait(false), cancellationToken, work.ReportPhase).ConfigureAwait(false);
+        }
+    }
+
+    private IDisposable AcquireMicrophoneMute()
+    {
+        var service = _nodeServiceAccessor()?.VoiceService;
+        if (service is not null)
+        {
+            lock (_microphoneGate)
+            {
+                _microphoneMutes.TryGetValue(service, out var count);
+                _microphoneMutes[service] = count + 1;
+                service.IsMutedForPlayback = true;
+            }
+        }
+        return new SpeechMicrophoneLease(async () =>
+        {
+            if (service is null) return;
+            await Task.Delay(300).ConfigureAwait(false);
+            lock (_microphoneGate)
+            {
+                if (_microphoneMutes.TryGetValue(service, out var count) && count > 1)
+                    _microphoneMutes[service] = count - 1;
+                else
+                {
+                    _microphoneMutes.Remove(service);
+                    service.IsMutedForPlayback = false;
+                }
+            }
+        });
     }
 
     private bool ShouldSuppressDuplicateManualSpeech(string text)
@@ -231,6 +340,8 @@ public sealed class OpenClawChatCoordinator : IDisposable
 
     public void Dispose()
     {
+        DialogSpeech.Dispose();
+        _dialogClient.Dispose();
         OpenClawChatDataProvider? provider;
         TextToSpeechService? fallbackTextToSpeech;
 
@@ -245,5 +356,15 @@ public sealed class OpenClawChatCoordinator : IDisposable
 
         provider?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         fallbackTextToSpeech?.Dispose();
+    }
+
+    private sealed class SpeechMicrophoneLease(Func<Task> release) : IDisposable
+    {
+        private int _released;
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+                _ = release();
+        }
     }
 }

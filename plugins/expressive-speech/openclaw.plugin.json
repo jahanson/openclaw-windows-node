@@ -1,0 +1,16 @@
+{
+  "id": "expressive-speech",
+  "name": "Expressive speech",
+  "description": "Separate written answers from composed spoken renditions for Windows Companion.",
+  "activation": { "onStartup": true },
+  "providerAuthAliases": {
+    "expressive-speech-openai": { "provider": "openai", "baseUrls": ["https://chatgpt.com/backend-api/codex"] }
+  },
+  "configSchema": {
+    "type": "object", "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "default": false },
+      "hostCompatibilityProfile": { "type": "string", "enum": ["release-2026.9.4", "upstream-a181c3f1d9086f52d5c198b69553f689715f6109"] }
+    }
+  }
+}

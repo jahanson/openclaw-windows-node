@@ -13,7 +13,7 @@
                        AutomationProperties.AutomationId="VoiceSettingsPageMarker"
                        Style="{StaticResource TitleTextBlockStyle}"/>
             <TextBlock x:Uid="VoiceSettingsPage_PageDescription" x:Name="PageDescriptionText"
-                       Text="Configure speech-to-text and voice interaction settings. All speech processing runs locally on your device."
+                       Text="Configure speech-to-text and voice interaction settings. Local and cloud processing depend on the selected provider."
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap" Margin="0,0,0,8"/>
@@ -173,6 +173,103 @@
 
                     <ToggleSwitch x:Uid="VoiceSettingsPage_AudioFeedbackToggle" x:Name="AudioFeedbackToggle" Toggled="OnAudioFeedbackToggled"
                                   Header="Audio feedback sounds"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Chat response speech is separate from the node/global TTS provider below. -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock x:Uid="VoiceSettingsPage_ChatSpeechHeader"
+                               Text="Chat response speech"
+                               FontWeight="SemiBold"/>
+                    <TextBlock x:Uid="VoiceSettingsPage_ChatSpeechDescription"
+                               Text="Choose how supported chat sessions produce expressive speech. This does not change the node text-to-speech provider."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                    <ComboBox x:Uid="VoiceSettingsPage_ChatSpeechProviderCombo"
+                              x:Name="ChatSpeechProviderCombo"
+                              Header="Provider"
+                              SelectionChanged="OnChatSpeechProviderChanged"
+                              Width="400">
+                        <ComboBoxItem x:Uid="VoiceSettingsPage_ChatSpeechExisting"
+                                      Content="Existing voice settings"
+                                      Tag="none"/>
+                        <ComboBoxItem x:Uid="VoiceSettingsPage_ChatSpeechDialog"
+                                      Content="ElevenLabs Dialog"
+                                      Tag="elevenlabs-dialog"/>
+                    </ComboBox>
+                    <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="12">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE946;" FontSize="14" Margin="0,1,0,0"
+                                       VerticalAlignment="Top"
+                                       AutomationProperties.AccessibilityView="Raw"/>
+                            <TextBlock x:Uid="VoiceSettingsPage_ChatSpeechStatus"
+                                       x:Name="ChatSpeechStatusText"
+                                       Grid.Column="1"
+                                       Text="Dialog is not selected. Chat continues using the existing voice settings."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
+                    <StackPanel x:Name="ChatSpeechDialogPanel" Spacing="8" Visibility="Collapsed">
+                        <ComboBox x:Uid="VoiceSettingsPage_ChatSpeechModeCombo"
+                                  x:Name="ChatSpeechModeCombo"
+                                  Header="Delivery preference"
+                                  SelectionChanged="OnChatSpeechModeChanged"
+                                  Width="520">
+                            <ComboBoxItem x:Uid="VoiceSettingsPage_ChatSpeechModeAuto"
+                                          Content="Auto: Live only when the active turn supports it"
+                                          Tag="auto"/>
+                            <ComboBoxItem x:Uid="VoiceSettingsPage_ChatSpeechModePrepared"
+                                          Content="Generate then play: Eleven v4 after the response is ready"
+                                          Tag="prepared"/>
+                            <ComboBoxItem x:Uid="VoiceSettingsPage_ChatSpeechModeLive"
+                                          Content="Live conversation: Eleven v4 Turbo during the response"
+                                          Tag="live"/>
+                        </ComboBox>
+                        <TextBlock x:Uid="VoiceSettingsPage_ChatSpeechModelExplanation"
+                                   Text="Generate then play uses the fixed Eleven v4 model. Live conversation uses the fixed Eleven v4 Turbo model. Auto chooses before speech begins and reports when live delivery is unsupported."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Uid="VoiceSettingsPage_ChatSpeechBudget"
+                                   Text="Spoken responses are limited to 2,000 characters. The written answer can be longer."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"/>
+                        <PasswordBox x:Uid="VoiceSettingsPage_DialogApiKeyBox"
+                                     x:Name="DialogApiKeyBox"
+                                     Header="ElevenLabs API Key"
+                                     PasswordChanged="OnDialogKeyChanged"
+                                     Width="300"/>
+                        <TextBox x:Uid="VoiceSettingsPage_DialogVoiceIdBox"
+                                 x:Name="DialogVoiceIdBox"
+                                 Header="ElevenLabs Voice ID"
+                                 TextChanged="OnDialogVoiceIdChanged"
+                                 Width="300"
+                                 PlaceholderText="e.g. 21m00Tcm4TlvDq8ikWAM"/>
+                        <Button x:Name="DialogPreviewButton"
+                                Click="OnDialogPreviewClick"
+                                AutomationProperties.LabeledBy="{Binding ElementName=DialogPreviewLabel}"
+                                HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon x:Name="DialogPreviewIcon" Glyph="&#xE768;" FontSize="14"/>
+                                <TextBlock x:Uid="VoiceSettingsPage_DialogPreview"
+                                           x:Name="DialogPreviewLabel"
+                                           Text="Preview prepared Dialog"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

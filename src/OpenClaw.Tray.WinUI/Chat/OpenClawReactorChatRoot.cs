@@ -30,7 +30,12 @@ public sealed record OpenClawReactorChatRootProps(
     Action<string>? OnOpenCheckpoints = null,
     bool IsCompact = false,
     Func<string, bool>? TryCopyText = null,
-    bool ShowSessionPicker = true);
+    bool ShowSessionPicker = true,
+    Func<ChatSpeechAction, Task<SpeechAttemptResult>>? OnSpeechAction = null,
+    Action<string?>? OnSpeechSessionSelected = null,
+    ChatSpeechAttemptOwner? SpeechState = null,
+    Func<bool>? IsDialogEnabled = null,
+    Func<string>? SpeechMode = null);
 
 /// <summary>
 /// Production Reactor root for the native chat surface. It owns the provider
@@ -41,6 +46,9 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
     private static bool s_showToolCalls = true;
     private static int s_toolCallsCollapseVersion;
     private static event EventHandler? ToolCallsVisibilityChanged;
+    private static event EventHandler? SpeechSettingsChanged;
+
+    public static void NotifySpeechSettingsChanged() => SpeechSettingsChanged?.Invoke(null, EventArgs.Empty);
 
     private string? _pendingSelectedThreadId;
 
@@ -70,6 +78,25 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
         var (toolCallsCollapseVersion, setToolCallsCollapseVersion) =
             UseState(s_toolCallsCollapseVersion, threadSafe: true);
         var (firstSendInFlight, setFirstSendInFlight) = UseState(false, threadSafe: true);
+        var (speechStatus, setSpeechStatus) = UseState(props.SpeechState?.Status, threadSafe: true);
+        var (dialogEnabled, setDialogEnabled) = UseState(props.IsDialogEnabled?.Invoke() == true, threadSafe: true);
+        var (speechMode, setSpeechMode) = UseState(props.SpeechMode?.Invoke() ?? "auto", threadSafe: true);
+        UseEffect((Func<Action>)(() =>
+        {
+            EventHandler refresh = (_, _) =>
+            {
+                setSpeechStatus(props.SpeechState?.Status);
+                setDialogEnabled(props.IsDialogEnabled?.Invoke() == true);
+                setSpeechMode(props.SpeechMode?.Invoke() ?? "auto");
+            };
+            if (props.SpeechState is { } speech) speech.StatusChanged += refresh;
+            SpeechSettingsChanged += refresh;
+            return () =>
+            {
+                if (props.SpeechState is { } speech) speech.StatusChanged -= refresh;
+                SpeechSettingsChanged -= refresh;
+            };
+        }), props.SpeechState);
 
         UseEffect((Func<Action>)(() =>
         {
@@ -136,6 +163,8 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
         }
 
         var effectiveThread = selectedMaterializedThread ?? CreateComposeOnlyThread(props.Provider, snapshot);
+        UseEffect(() => props.OnSpeechSessionSelected?.Invoke(effectiveThread?.Id),
+            effectiveThread?.Id, props.Provider);
         if (effectiveThread is { } selected && string.Equals(_pendingSelectedThreadId, selected.Id, StringComparison.Ordinal))
             _pendingSelectedThreadId = null;
 
@@ -261,10 +290,12 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
             effectiveThread is { } permissionThread
                 ? (requestId, action) => OnPermission(permissionThread.Id, requestId, action)
                 : null,
-            mediaResolver);
+            mediaResolver,
+            dialogEnabled ? props.OnSpeechAction : null);
 
         void SelectThread(string threadId)
         {
+            props.OnSpeechSessionSelected?.Invoke(threadId);
             _pendingSelectedThreadId = threadId;
             selectedIdRef.Current = threadId;
             setSelectedId(threadId);
@@ -333,9 +364,19 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
 
         return Grid(
             [GridSize.Star()],
-            [GridSize.Star(), GridSize.Auto],
+            [GridSize.Star(), GridSize.Auto, GridSize.Auto],
             timelineElement.Grid(row: 0),
-            composerElement.Grid(row: 1))
+            (dialogEnabled
+                ? TextBlock(string.Join(" · ", new[]
+                    {
+                        "ElevenLabs Dialog",
+                        SpeechModeLabel(speechMode, speechStatus?.EffectiveMode),
+                        SpeechStatusLabel(speechStatus),
+                        SpeechReasonLabel(speechStatus?.Reason)
+                    }.Where(static value => !string.IsNullOrWhiteSpace(value))))
+                    .TextWrapping(TextWrapping.Wrap).FontSize(12).Margin(16, 4, 16, 4)
+                : Empty()).Grid(row: 1),
+            composerElement.Grid(row: 2))
             .Background(Theme.Ref("ChatCanvasBrush"))
             .HAlign(HorizontalAlignment.Stretch)
             .VAlign(VerticalAlignment.Stretch);
@@ -347,6 +388,79 @@ public sealed class OpenClawReactorChatRoot : Component<OpenClawReactorChatRootP
             new ChatTimelinePresentationContext(null, Array.Empty<ChatTimelineItem>(), false, null),
             null,
             false));
+
+    private static string SpeechStatusLabel(SpeechAttemptStatus? status)
+    {
+        var key = status?.State switch
+        {
+            "composing" or "synthesizing" => "Chat_Speech_Preparing",
+            "buffering" => "Chat_Speech_Buffering",
+            "playing" => "Chat_Speech_Playing",
+            "completed" => "Chat_Speech_Finished",
+            "failed" when status.PlaybackStarted => "Chat_Speech_PartialFailed",
+            "failed" => "Chat_Speech_Failed",
+            "stopped" or "cancelled" or "muted" when status.PlaybackStarted => "Chat_Speech_PartialStopped",
+            "stopped" or "cancelled" or "muted" => "Chat_Speech_Stopped",
+            "session-changed" or "connection-changed" or null => "Chat_Speech_Waiting",
+            "unavailable" => "Chat_Speech_NotReady",
+            _ => null,
+        };
+        return key is null
+            ? status?.State ?? LocalizationHelper.GetString("Chat_Speech_Waiting")
+            : LocalizationHelper.GetString(key);
+    }
+
+    private static string SpeechModeLabel(string selectedMode, string? effectiveMode)
+    {
+        var selected = selectedMode switch
+        {
+            "prepared" => LocalizationHelper.GetString("Chat_Speech_ModePrepared"),
+            "live" => LocalizationHelper.GetString("Chat_Speech_ModeLive"),
+            _ => LocalizationHelper.GetString("Chat_Speech_ModeAuto")
+        };
+        if (effectiveMode is null || effectiveMode == selectedMode) return selected;
+        var effective = effectiveMode == "live"
+            ? LocalizationHelper.GetString("Chat_Speech_ModeLive")
+            : LocalizationHelper.GetString("Chat_Speech_ModePrepared");
+        return $"{selected}: {effective}";
+    }
+
+    internal static string? SpeechReasonLabel(string? reason)
+    {
+        var key = reason switch
+        {
+            "signed-admin-device-required" => "Chat_Speech_ReasonSignedAdmin",
+            "plugin-disabled" => "Chat_Speech_ReasonPluginDisabled",
+            "unsupported-host" => "Chat_Speech_ReasonUnsupportedHost",
+            "incompatible-version" => "Chat_Speech_ReasonIncompatibleVersion",
+            "session-core-tts-must-be-off" => "Chat_Speech_ReasonCoreTtsMustBeOff",
+            "unsupported-model" => "Chat_Speech_ReasonUnsupportedModel",
+            "invalid-session" => "Chat_Speech_ReasonInvalidSession",
+            "mode-unavailable" => "Chat_Speech_ReasonModeUnavailable",
+            "live-unavailable" => "Chat_Speech_ReasonLiveUnavailable",
+            "intent-unavailable" => "Chat_Speech_ReasonIntentUnavailable",
+            "speech-content-unavailable" => "Chat_Speech_ReasonContentUnavailable",
+            "speech-content-invalid" => "Chat_Speech_ReasonContentInvalid",
+            "speech-content-limit" => "Chat_Speech_ReasonContentLimit",
+            "written-answer-streamed" => "Chat_Speech_ReasonWrittenStreamed",
+            "written-answer-text-limit" => "Chat_Speech_ReasonWrittenTextLimit",
+            "written-answer-audio-limit" => "Chat_Speech_ReasonWrittenAudioLimit",
+            "written-answer-time-limit" => "Chat_Speech_ReasonWrittenTimeLimit",
+            "written-answer-invalid-text" => "Chat_Speech_ReasonWrittenInvalidText",
+            "speech-session-invalidated" => "Chat_Speech_ReasonSessionInvalidated",
+            "speech-generation-failed" => "Chat_Speech_ReasonGenerationFailed",
+            "speech-eligibility-changed" => "Chat_Speech_ReasonEligibilityChanged",
+            "provider-authentication" => "Chat_Speech_ReasonProviderAuthentication",
+            "provider-configuration" => "Chat_Speech_ReasonProviderConfiguration",
+            "provider-account-restriction" => "Chat_Speech_ReasonProviderAccountRestriction",
+            "provider-unavailable" => "Chat_Speech_ReasonProviderUnavailable",
+            "provider-invalid-response" => "Chat_Speech_ReasonProviderInvalidResponse",
+            "playback-busy" => "Chat_Speech_ReasonPlaybackBusy",
+            "playback-failed" => "Chat_Speech_ReasonPlaybackFailed",
+            _ => null
+        };
+        return key is null ? null : LocalizationHelper.GetString(key);
+    }
 
     private ChatThread? CreateComposeOnlyThread(
         IChatDataProvider provider,

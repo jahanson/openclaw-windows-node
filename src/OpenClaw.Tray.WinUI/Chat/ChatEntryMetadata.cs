@@ -68,6 +68,10 @@ namespace OpenClawTray.Chat;
 /// Renderer-safe assistant media presentation. Transport references remain
 /// opaque and are never encoded into timeline text.
 /// </param>
+/// <param name="ResponseId">
+/// Stable response/run identity shared by live assistant frames and composed
+/// speech history. It reconciles the same response without comparing text.
+/// </param>
 public sealed record ChatEntryMetadata(
     DateTimeOffset? Timestamp,
     string? Model,
@@ -85,4 +89,6 @@ public sealed record ChatEntryMetadata(
     bool IsLocalQueuedSend = false,
     string? LocalQueuedMessageId = null,
     IReadOnlyList<ChatAttachmentPresentation>? Attachments = null,
-    ChatAssistantContentPresentation? AssistantContent = null);
+    ChatAssistantContentPresentation? AssistantContent = null,
+    OpenClaw.Shared.Speech.SpeechRendition? SpeechRendition = null,
+    string? ResponseId = null);

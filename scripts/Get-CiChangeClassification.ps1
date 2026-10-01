@@ -153,6 +153,13 @@ function Add-PathImpact {
         [Parameter(Mandatory)][string]$Path
     )
 
+    if ($Path.StartsWith("plugins/expressive-speech/", [StringComparison]::OrdinalIgnoreCase)) {
+        # The plugin package is always checked in fast-validation; shared/tray
+        # lanes also exercise the wire protocol and Companion consumer.
+        Add-Lanes -Impact $Impact -Core -Tray
+        return $true
+    }
+
     if ($Path.Equals(
             "src/OpenClaw.SetupEngine/GatewayInstallPolicy.cs",
             [StringComparison]::OrdinalIgnoreCase)) {

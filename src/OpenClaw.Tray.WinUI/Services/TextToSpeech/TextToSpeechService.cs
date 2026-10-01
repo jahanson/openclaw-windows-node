@@ -52,8 +52,13 @@ public sealed class TextToSpeechService : IDisposable
     /// <summary>Exposed so Settings UI can drive download/delete from the same instance.</summary>
     public PiperVoiceManager PiperVoices => _piperVoices;
 
-    public async Task<TtsSpeakResult> SpeakAsync(TtsSpeakArgs args, CancellationToken cancellationToken = default)
+    public Task<TtsSpeakResult> SpeakAsync(TtsSpeakArgs args, CancellationToken cancellationToken = default) =>
+        SpeakAsync(args, SpeechCaller.Node, cancellationToken);
+
+    public async Task<TtsSpeakResult> SpeakAsync(TtsSpeakArgs args, SpeechCaller caller, CancellationToken cancellationToken = default)
     {
+        using var lease = await SpeechPlaybackArbiter.Shared.AcquireAsync(caller, args.Interrupt, cancellationToken).ConfigureAwait(false);
+        cancellationToken = lease.Token;
         // Resolve the provider that should actually serve this call. When the
         // configured/default provider isn't usable (no ElevenLabs key, Piper
         // voice not downloaded), fall back to Windows TTS so the assistant can
@@ -389,6 +394,7 @@ public sealed class TextToSpeechService : IDisposable
         bool interrupt,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (interrupt)
             InterruptActivePlayback();
 
@@ -454,8 +460,8 @@ public sealed class TextToSpeechService : IDisposable
         }
     }
 
-    /// <summary>Stops any currently playing TTS audio immediately.</summary>
-    public void StopSpeaking() => InterruptActivePlayback();
+    /// <summary>Cancels the Node caller's active speech without stopping Chat or Preview.</summary>
+    public void StopSpeaking() => SpeechPlaybackArbiter.Shared.Stop(SpeechCaller.Node);
 
     public void Dispose()
     {

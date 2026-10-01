@@ -32,6 +32,7 @@ internal enum HubPageKind
 internal enum HubCommandActionKind
 {
     Navigate,
+    OpenChat,
     OpenDashboard,
     ToggleSetting
 }
@@ -55,6 +56,9 @@ internal sealed record HubCommandAction(
 
     public static HubCommandAction OpenDashboard(string? path = null) =>
         new(HubCommandActionKind.OpenDashboard, path);
+
+    public static HubCommandAction OpenChat() =>
+        new(HubCommandActionKind.OpenChat);
 
     public static HubCommandAction ToggleSetting(HubSettingToggle toggle) =>
         new(HubCommandActionKind.ToggleSetting, Toggle: toggle);
@@ -282,7 +286,11 @@ internal static class HubPageRegistry
         AddNavigation(commands, context, "🛡️", "Command_GoToPermissions", "permissions");
         AddNavigation(commands, context, "⚙️", "Command_GoToSettings", "settings");
         AddNavigation(commands, context, "🔔", "Command_GoToNotifications", "notifications");
-        AddNavigation(commands, context, "💬", "Command_OpenChatWindow", "chat");
+        commands.Add(new HubCommand(
+            "💬",
+            Get(context, "Command_OpenChatWindow_Title"),
+            Get(context, "Command_OpenChatWindow_Subtitle"),
+            HubCommandAction.OpenChat()));
         commands.Add(new HubCommand(
             "🌐",
             Get(context, "Command_OpenDashboard_Title"),

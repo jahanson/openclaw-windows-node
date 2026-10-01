@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\plugins\expressive-speech\contracts\delivery-fixture.json" Link="Speech\delivery-fixture.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Mxc\Golden\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

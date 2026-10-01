@@ -1791,6 +1791,9 @@ public static class ModelFormatting
 /// </summary>
 public class ChatMessageInfo
 {
+    /// <summary>Optional composed speech, separately validated against authorized history identity.</summary>
+    public Speech.SpeechRendition? SpeechRendition { get; set; }
+
     public const string SilentAssistantDirective = "NO_REPLY";
 
     public static bool IsSilentAssistantDirective(string? role, string? text) =>

@@ -1158,13 +1158,13 @@ public sealed partial class HubWindow : WindowEx
 
     private void ExecuteCommand(HubCommand command)
     {
+        if (HubCommandActionDispatcher.TryDispatch(command.Action, (IAppCommands)Application.Current))
+            return;
+
         switch (command.Action.Kind)
         {
             case HubCommandActionKind.Navigate when command.Action.Value is { Length: > 0 } tag:
                 NavigateTo(tag);
-                break;
-            case HubCommandActionKind.OpenDashboard:
-                ((IAppCommands)Application.Current).OpenDashboard(command.Action.Value);
                 break;
             case HubCommandActionKind.ToggleSetting when command.Action.Toggle is { } toggle:
                 ToggleCommandPalettePermission(toggle);

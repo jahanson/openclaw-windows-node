@@ -70,6 +70,8 @@ public class LocalizationValidationTests
         "VoiceSettingsPage_ElevenLabsVoiceIdBox.PlaceholderText",
         "VoiceSettingsPage_ElevenLabsModelBox.PlaceholderText",
         "VoiceSettingsPage_MiniMaxModelBox.PlaceholderText",
+        // Canonical ElevenLabs product name, kept unchanged across locales.
+        "VoiceSettingsPage_ChatSpeechDialog.Content",
         // Capability command identifier — should match the wire/API name.
         "NotificationsPage_MetadataSystemRun",
         // Punctuation-only layout format; localized parts are supplied by

@@ -33,6 +33,7 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.7" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="Zeroconf" Version="3.6.11" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -190,6 +191,15 @@
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TrayDashboardSummary.cs" Link="Services\TrayDashboardSummary.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\NodeSummaryText.cs" Link="Services\NodeSummaryText.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\ElevenLabsTextToSpeechClient.cs" Link="Services\TextToSpeech\ElevenLabsTextToSpeechClient.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\ElevenLabsDialogClient.cs" Link="Services\TextToSpeech\ElevenLabsDialogClient.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\WrittenAnswerSpeechPlayback.cs" Link="Services\TextToSpeech\WrittenAnswerSpeechPlayback.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\PcmAudioFormat.cs" Link="Services\TextToSpeech\PcmAudioFormat.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\PcmPlaybackBuffer.cs" Link="Services\TextToSpeech\PcmPlaybackBuffer.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\WasapiPcmPlayback.cs" Link="Services\TextToSpeech\WasapiPcmPlayback.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\SpeechPlaybackArbiter.cs" Link="Services\TextToSpeech\SpeechPlaybackArbiter.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Chat\ChatSpeechAttemptOwner.cs" Link="Chat\ChatSpeechAttemptOwner.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Chat\ChatSpeechDelivery.cs" Link="Chat\ChatSpeechDelivery.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Chat\ChatSpeechSurfaceSelection.cs" Link="Chat\ChatSpeechSurfaceSelection.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\TextToSpeech\MiniMaxTextToSpeechClient.cs" Link="Services\TextToSpeech\MiniMaxTextToSpeechClient.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\GatewayDiscoveryService.cs" Link="Services\GatewayDiscoveryService.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\A2UI\Actions\AgentMessageFormatter.cs" Link="A2UI\Actions\AgentMessageFormatter.cs" />
@@ -220,6 +230,7 @@
        source-contract tests instead. -->
   <ItemGroup>
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\IAppCommands.cs" Link="Services\IAppCommands.cs" />
+    <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Services\HubCommandActionDispatcher.cs" Link="Services\HubCommandActionDispatcher.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Presentation\IUiDispatcher.cs" Link="Presentation\IUiDispatcher.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Presentation\INavigationAware.cs" Link="Presentation\INavigationAware.cs" />
     <Compile Include="..\..\src\OpenClaw.Tray.WinUI\Presentation\INavigationService.cs" Link="Presentation\INavigationService.cs" />

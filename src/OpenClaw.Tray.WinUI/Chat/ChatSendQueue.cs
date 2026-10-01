@@ -39,6 +39,7 @@ internal enum AssistantQueueFrameDisposition
 {
     Render,
     Drop,
+    Reconcile,
 }
 
 internal enum ChatAdmissionOutcome

@@ -1,0 +1,20 @@
+{
+  "name": "@openclaw-windows/expressive-speech",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "probe:host": "node test/host-probe.mjs",
+    "probe:packed": "node test/packed-host-probe.mjs",
+    "probe:matrix": "node test/tts-matrix-probe.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "tsc --noEmit"
+  },
+  "engines": { "node": ">=24" },
+  "openclaw": { "extensions": ["./dist/index.js"] },
+  "files": ["dist", "openclaw.plugin.json", "README.md"],
+  "peerDependencies": { "openclaw": "2026.9.4 || 2026.9.6" },
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "~5.9.3", "openclaw": "2026.9.4" }
+}

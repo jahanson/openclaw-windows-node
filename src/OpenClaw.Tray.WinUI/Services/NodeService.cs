@@ -2138,7 +2138,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
         if (_textToSpeechService == null)
             throw new InvalidOperationException("Text-to-speech service not available");
 
-        return _textToSpeechService.SpeakAsync(args, cancellationToken);
+        return _textToSpeechService.SpeakAsync(args, SpeechCaller.Node, cancellationToken);
     }
 
     private Task<TtsStatusResult> OnTtsStatusAsync(CancellationToken cancellationToken)

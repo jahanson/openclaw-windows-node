@@ -2494,7 +2494,7 @@ Utilisez l'une de ces options :
     <value>Voix et audio</value>
   </data>
   <data name="VoiceSettingsPage_PageDescription.Text" xml:space="preserve">
-    <value>Configurez la reconnaissance vocale et les paramètres d'interaction vocale. Tout le traitement vocal s'exécute localement sur votre appareil.</value>
+    <value>Configurez la reconnaissance vocale et les paramètres d'interaction vocale. Le traitement local ou infonuagique dépend du fournisseur sélectionné.</value>
   </data>
   <data name="VoiceSettingsPage_SttHeader.Text" xml:space="preserve">
     <value>Reconnaissance vocale</value>
@@ -7875,4 +7875,77 @@ Vos paramètres, votre passerelle, vos fichiers et vos modèles restent en place
   <data name="AgentCreation_Description" xml:space="preserve"><value>Créez un agent et son espace de travail sur la passerelle connectée. Cela ne crée pas de conversation et ne modifie pas la conversation actuelle.</value></data>
   <data name="AgentCreation_PermissionRequired" xml:space="preserve"><value>Connectez-vous à une passerelle avec l’autorisation operator.admin pour créer un agent.</value></data>
   <data name="AgentCreation_Failed" xml:space="preserve"><value>La création de l’agent n’a pas pu être confirmée. Fermez cette boîte de dialogue et actualisez les agents avant de réessayer.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechHeader.Text" xml:space="preserve"><value>Synthèse vocale des réponses du chat</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDescription.Text" xml:space="preserve"><value>Choisissez comment les sessions de chat compatibles produisent une voix expressive. Cela ne modifie pas le fournisseur de synthèse vocale du nœud.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechProviderCombo.Header" xml:space="preserve"><value>Fournisseur</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechExisting.Content" xml:space="preserve"><value>Paramètres vocaux existants</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechDialog.Content" xml:space="preserve"><value>ElevenLabs Dialog</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatus.Text" xml:space="preserve"><value>Dialog n’est pas sélectionné. Le chat continue d’utiliser les paramètres vocaux existants.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeCombo.Header" xml:space="preserve"><value>Préférence de diffusion</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeAuto.Content" xml:space="preserve"><value>Auto : mode en direct uniquement si le tour actif le prend en charge</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModePrepared.Content" xml:space="preserve"><value>Générer puis lire : Eleven v4 une fois la réponse prête</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModeLive.Content" xml:space="preserve"><value>Conversation en direct : Eleven v4 Turbo pendant la réponse</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechModelExplanation.Text" xml:space="preserve"><value>Générer puis lire utilise le modèle Eleven v4 fixe. Conversation en direct utilise le modèle Eleven v4 Turbo fixe. Auto choisit avant le début de la lecture et signale si la diffusion en direct n’est pas prise en charge.</value></data>
+  <data name="VoiceSettingsPage_DialogApiKeyBox.Header" xml:space="preserve"><value>Clé API ElevenLabs</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.Header" xml:space="preserve"><value>ID de voix ElevenLabs</value></data>
+  <data name="VoiceSettingsPage_DialogVoiceIdBox.PlaceholderText" xml:space="preserve"><value>par ex. 21m00Tcm4TlvDq8ikWAM</value></data>
+  <data name="VoiceSettingsPage_DialogPreview.Text" xml:space="preserve"><value>Écouter un aperçu Dialog préparé</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusExisting" xml:space="preserve"><value>Dialog n’est pas sélectionné. Le chat continue d’utiliser les paramètres vocaux existants.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsKey" xml:space="preserve"><value>Ajoutez une clé API ElevenLabs pour configurer Dialog. La session de chat active doit également signaler des capacités de plugin et d’exécuteur compatibles.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusNeedsVoice" xml:space="preserve"><value>Ajoutez un ID de voix ElevenLabs pour configurer Dialog. La session de chat active doit également signaler des capacités de plugin et d’exécuteur compatibles.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechStatusConfigured" xml:space="preserve"><value>Configuration enregistrée. Le chat actif indique si le plugin, l’exécuteur, le fournisseur et le mode sélectionné sont disponibles.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewButtonContent" xml:space="preserve"><value>Écouter un aperçu Dialog préparé</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGenerating" xml:space="preserve"><value>Génération de l’aperçu...</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewGeneratingStatus" xml:space="preserve"><value>Génération d’un aperçu préparé avec Eleven v4. Le texte d’aperçu est envoyé à ElevenLabs.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewBusy" xml:space="preserve"><value>La sortie vocale est occupée. Arrêtez la lecture en cours ou attendez, puis réessayez.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewFailed" xml:space="preserve"><value>L’aperçu Dialog a échoué. Vérifiez la clé API, l’ID de voix, l’accès au compte et la connexion réseau.</value></data>
+  <data name="VoiceSettingsPage_DialogPreviewText" xml:space="preserve"><value>[warmly] Voici votre voix ElevenLabs Dialog.</value></data>
+  <data name="Chat_Assistant_Action_SpeechTranscript" xml:space="preserve"><value>Transcription vocale</value></data>
+  <data name="Chat_Assistant_Action_ReadWritten" xml:space="preserve"><value>Lire la réponse écrite</value></data>
+  <data name="Chat_Speech_Unavailable" xml:space="preserve"><value>Aucune synthèse vocale complète n’est enregistrée pour cette réponse.</value></data>
+  <data name="Chat_Speech_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Chat_Speech_StatusTitle" xml:space="preserve"><value>Lecture vocale</value></data>
+  <data name="Chat_Speech_ReplayCost" xml:space="preserve"><value>La relecture génère un nouvel audio et peut utiliser des crédits du fournisseur.</value></data>
+  <data name="Chat_Speech_Preparing" xml:space="preserve"><value>Préparation de la synthèse vocale</value></data>
+  <data name="Chat_Speech_Finished" xml:space="preserve"><value>Terminé</value></data>
+  <data name="Chat_Speech_Stopped" xml:space="preserve"><value>Arrêté</value></data>
+  <data name="Chat_Speech_Waiting" xml:space="preserve"><value>En attente de la synthèse vocale</value></data>
+  <data name="Chat_Speech_NotReady" xml:space="preserve"><value>Indisponible</value></data>
+  <data name="Chat_Speech_Buffering" xml:space="preserve"><value>Mise en mémoire de la parole</value></data>
+  <data name="Chat_Speech_Playing" xml:space="preserve"><value>Lecture de la parole</value></data>
+  <data name="Chat_Speech_ModeAuto" xml:space="preserve"><value>Automatique</value></data>
+  <data name="Chat_Speech_ModePrepared" xml:space="preserve"><value>Générer puis lire</value></data>
+  <data name="Chat_Speech_ModeLive" xml:space="preserve"><value>Conversation en direct</value></data>
+  <data name="Chat_Speech_ReasonSignedAdmin" xml:space="preserve"><value>Un appareil administrateur signé et autorisé est requis.</value></data>
+  <data name="Chat_Speech_ReasonPluginDisabled" xml:space="preserve"><value>Le plugin Dialog de la passerelle est désactivé.</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedHost" xml:space="preserve"><value>Cette version de la passerelle ne prend pas en charge la composition Dialog.</value></data>
+  <data name="Chat_Speech_ReasonIncompatibleVersion" xml:space="preserve"><value>La version du protocole Dialog de la passerelle est incompatible.</value></data>
+  <data name="Chat_Speech_ReasonCoreTtsMustBeOff" xml:space="preserve"><value>Désactivez la synthèse vocale de la passerelle pour cette session avec /tts chat off, puis renvoyez votre message.</value></data>
+  <data name="Chat_Speech_ReasonUnsupportedModel" xml:space="preserve"><value>Le modèle sélectionné ne prend pas en charge la synthèse vocale Dialog.</value></data>
+  <data name="Chat_Speech_ReasonInvalidSession" xml:space="preserve"><value>La session de chat active est indisponible.</value></data>
+  <data name="Chat_Speech_ReasonModeUnavailable" xml:space="preserve"><value>Le mode de diffusion Dialog demandé est indisponible.</value></data>
+  <data name="Chat_Speech_ReasonLiveUnavailable" xml:space="preserve"><value>La diffusion en direct est indisponible. Utilisation de Générer puis lire.</value></data>
+  <data name="Chat_Speech_ReasonIntentUnavailable" xml:space="preserve"><value>L'intention vocale est indisponible. Le chat écrit continue.</value></data>
+  <data name="Chat_Speech_Failed" xml:space="preserve"><value>Échec de la synthèse vocale</value></data>
+  <data name="Chat_Speech_PartialFailed" xml:space="preserve"><value>Échec après la lecture d'une partie de l'audio</value></data>
+  <data name="Chat_Speech_PartialStopped" xml:space="preserve"><value>Arrêt après la lecture d'une partie de l'audio</value></data>
+  <data name="Chat_Speech_ReasonContentUnavailable" xml:space="preserve"><value>Cette réponse ne contient aucune version vocale composée complète. Le chat écrit reste inchangé.</value></data>
+  <data name="Chat_Speech_ReasonContentInvalid" xml:space="preserve"><value>La version vocale composée était incomplète ou incorrecte. Le chat écrit reste inchangé.</value></data>
+  <data name="Chat_Speech_ReasonContentLimit" xml:space="preserve"><value>La version vocale composée a dépassé une limite de sécurité. Le chat écrit reste inchangé.</value></data>
+  <data name="Chat_Speech_ReasonSessionInvalidated" xml:space="preserve"><value>La session de chat a changé, donc la lecture vocale a été arrêtée.</value></data>
+  <data name="Chat_Speech_ReasonGenerationFailed" xml:space="preserve"><value>La passerelle n'a pas pu terminer la version vocale composée. Le chat écrit reste inchangé.</value></data>
+  <data name="Chat_Speech_ReasonEligibilityChanged" xml:space="preserve"><value>Ce tour ne prend plus en charge la synthèse vocale Dialog. Vérifiez les paramètres de la session et réessayez.</value></data>
+  <data name="Chat_Speech_ReasonProviderAuthentication" xml:space="preserve"><value>ElevenLabs a refusé la clé API. Vérifiez son autorisation de synthèse vocale.</value></data>
+  <data name="Chat_Speech_ReasonProviderConfiguration" xml:space="preserve"><value>Configurez la clé API et la voix ElevenLabs avant d'utiliser Dialog.</value></data>
+  <data name="Chat_Speech_ReasonProviderAccountRestriction" xml:space="preserve"><value>ElevenLabs a refusé cette voix ou ce compte. Vérifiez l'abonnement et l'accès à la voix.</value></data>
+  <data name="Chat_Speech_ReasonProviderUnavailable" xml:space="preserve"><value>ElevenLabs est temporairement indisponible. Vérifiez la connexion ou réessayez plus tard.</value></data>
+  <data name="Chat_Speech_ReasonProviderInvalidResponse" xml:space="preserve"><value>ElevenLabs a renvoyé un son incorrect ou une réponse non prise en charge.</value></data>
+  <data name="Chat_Speech_ReasonPlaybackBusy" xml:space="preserve"><value>Une autre tâche vocale utilise la sortie audio. Arrêtez-la et réessayez.</value></data>
+  <data name="Chat_Speech_ReasonPlaybackFailed" xml:space="preserve"><value>La sortie audio n'a pas pu lire cette synthèse vocale.</value></data>
+  <data name="VoiceSettingsPage_ChatSpeechBudget.Text" xml:space="preserve"><value>Les réponses vocales sont limitées à 2 000 caractères. La réponse écrite peut être plus longue.</value></data>
+  <data name="Chat_Speech_ReasonWrittenStreamed" xml:space="preserve"><value>Lecture de la réponse écrite par petites sections diffusées avec Eleven v4 Turbo. De brèves pauses sont possibles.</value></data>
+  <data name="Chat_Speech_ReasonWrittenTextLimit" xml:space="preserve"><value>La réponse écrite dépasse la limite de 10 000 caractères ou contient une unité de texte trop grande pour être divisée sans risque.</value></data>
+  <data name="Chat_Speech_ReasonWrittenAudioLimit" xml:space="preserve"><value>La lecture de la réponse écrite a atteint sa limite audio.</value></data>
+  <data name="Chat_Speech_ReasonWrittenTimeLimit" xml:space="preserve"><value>La lecture de la réponse écrite a atteint sa limite de 15 minutes.</value></data>
+  <data name="Chat_Speech_ReasonWrittenInvalidText" xml:space="preserve"><value>La réponse écrite contient du texte Unicode non valide et ne peut pas être lue correctement.</value></data>
 </root>

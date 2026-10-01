@@ -48,6 +48,8 @@ public class SettingsRoundTripTests
             VoiceAudioFeedback = false,
             NodeTtsEnabled = true,
             TtsProvider = "elevenlabs",
+            ChatSpeechProvider = "elevenlabs-dialog",
+            ChatSpeechMode = "live",
             TtsElevenLabsApiKey = "elevenlabs-key",
             TtsElevenLabsModel = "eleven_multilingual_v2",
             TtsElevenLabsVoiceId = "voice-123",
@@ -119,6 +121,8 @@ public class SettingsRoundTripTests
         Assert.Equal(original.VoiceAudioFeedback, restored.VoiceAudioFeedback);
         Assert.Equal(original.NodeTtsEnabled, restored.NodeTtsEnabled);
         Assert.Equal(original.TtsProvider, restored.TtsProvider);
+        Assert.Equal(original.ChatSpeechProvider, restored.ChatSpeechProvider);
+        Assert.Equal(original.ChatSpeechMode, restored.ChatSpeechMode);
         Assert.Equal(original.TtsElevenLabsApiKey, restored.TtsElevenLabsApiKey);
         Assert.Equal(original.TtsElevenLabsModel, restored.TtsElevenLabsModel);
         Assert.Equal(original.TtsElevenLabsVoiceId, restored.TtsElevenLabsVoiceId);
@@ -202,6 +206,8 @@ public class SettingsRoundTripTests
         Assert.Equal("auto", settings.SttLanguage);
         Assert.False(settings.NodeTtsEnabled);
         Assert.Equal("piper", settings.TtsProvider);
+        Assert.Equal("none", settings.ChatSpeechProvider);
+        Assert.Equal("auto", settings.ChatSpeechMode);
         Assert.Null(settings.TtsElevenLabsApiKey);
         Assert.Null(settings.TtsElevenLabsModel);
         Assert.Null(settings.TtsElevenLabsVoiceId);
@@ -546,6 +552,42 @@ public class SettingsRoundTripTests
 
             settings.AppTheme = "dark";
             Assert.Equal("Dark", settings.AppTheme);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SettingsManager_ChatSpeechWritesAreNormalizedFieldScopedAndRollbackOnConflict()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "OpenClaw.Tray.Tests", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var settings = new SettingsManager(dir) { NotificationSound = "Chime" };
+            settings.SaveOrThrow();
+
+            settings.SaveChatSpeechProvider("ELEVENLABS-DIALOG");
+            settings.SaveChatSpeechMode("LIVE");
+            var reloaded = new SettingsManager(dir);
+            Assert.Equal("elevenlabs-dialog", reloaded.ChatSpeechProvider);
+            Assert.Equal("live", reloaded.ChatSpeechMode);
+            Assert.Equal("Chime", reloaded.NotificationSound);
+            Assert.Equal("piper", reloaded.TtsProvider);
+
+            reloaded.SaveChatSpeechProvider("unknown-provider");
+            reloaded.SaveChatSpeechMode("unknown-mode");
+            Assert.Equal("none", reloaded.ChatSpeechProvider);
+            Assert.Equal("auto", reloaded.ChatSpeechMode);
+
+            var other = new SettingsManager(dir) { NotificationSound = "External" };
+            other.SaveOrThrow();
+            Assert.Throws<SettingsPersistenceConflictException>(() =>
+                reloaded.SaveChatSpeechProvider("elevenlabs-dialog"));
+            Assert.Equal("none", reloaded.ChatSpeechProvider);
         }
         finally
         {

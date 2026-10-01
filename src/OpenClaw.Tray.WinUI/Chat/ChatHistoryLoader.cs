@@ -608,6 +608,8 @@ internal sealed class ChatHistoryLoader : IDisposable
                 OpenClawKind: message.OpenClawKind,
                 CompactionTokensBefore: message.CompactionTokensBefore,
                 CompactionTokensAfter: message.CompactionTokensAfter,
+                SpeechRendition: message.SpeechRendition,
+                ResponseId: message.SpeechRendition?.Identity.ResponseId,
                 AssistantContent: role == "assistant"
                     ? ChatAssistantContentProjector.Project(
                         replayPart.AssistantContentParts)

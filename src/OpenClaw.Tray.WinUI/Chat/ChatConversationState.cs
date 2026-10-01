@@ -143,6 +143,19 @@ internal sealed class ChatConversationState
             return GetResetVersionLocked(threadId);
     }
 
+    internal SpeechSessionIdentity? ResolveSpeechSession(string gatewayId, string threadId)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _status != ConnectionStatus.Connected) return null;
+            var current = _presentation.SessionSnapshot().FirstOrDefault(session => session.Key == threadId);
+            if (current is null) return null;
+            var physicalId = _history.ResolveSpeechSessionId(threadId, current.SessionId);
+            return string.IsNullOrWhiteSpace(physicalId) ? null
+                : new(gatewayId, _history.ConnectionGeneration, threadId, physicalId);
+        }
+    }
+
     internal ChatHistoryCommitToken CaptureHistoryToken(string threadId)
     {
         lock (_gate)
@@ -729,6 +742,13 @@ internal sealed class ChatConversationState
                 dispatch.Request.Id);
             return new(true, null);
         }
+    }
+
+    internal bool IsSendDispatchCurrent(ChatQueuedSendDispatch dispatch)
+    {
+        lock (_gate)
+            return IsDispatchGenerationCurrentLocked(dispatch) &&
+                (dispatch.StartedDirectly || _queue.FindRequest(dispatch.Request.ThreadId, dispatch.Request.Id) is not null);
     }
 
     internal ChatSendCommit CommitSendResult(
@@ -1401,6 +1421,60 @@ internal sealed class ChatConversationState
         }
     }
 
+    internal ChatEmptyTerminalTransition? CompleteEmptyChatTerminal(
+        AgentEventInfo terminal,
+        ChatProjectionContext context)
+    {
+        var threadId = terminal.SessionKey!;
+        var runId = terminal.RunId;
+        lock (_gate)
+        {
+            var timeline = GetOrCreateTimelineLocked(threadId);
+            if (!timeline.TurnActive ||
+                string.IsNullOrWhiteSpace(runId) ||
+                !_queue.TryResolveMessageForRun(threadId, runId, out _))
+            {
+                return null;
+            }
+            if (_lifecycle.TryGetActiveRun(threadId, out var activeRunId) &&
+                !string.Equals(activeRunId, runId, StringComparison.Ordinal))
+            {
+                return null;
+            }
+            if (!_reset.TryAcceptOwnedTerminal(threadId, terminal) ||
+                _lifecycle.ShouldDropTerminal(
+                    threadId,
+                    runId,
+                    _queue.RunIdsForThread(threadId),
+                    timeline.TurnActive,
+                    out _))
+            {
+                return null;
+            }
+
+            _reset.CompleteRun(threadId, runId);
+            _lifecycle.RemoveAbortedRun(runId);
+            _lifecycle.RemoveActiveRun(threadId);
+            _lifecycle.ClearThreadSuppression(threadId);
+            _queue.RemoveRunMappingByRunId(threadId, runId);
+            if (!_queue.HasPendingMessages(threadId))
+                _queue.ClearLocallyInitiated(threadId);
+            _timelines[threadId] = ChatTimelineReducer.Apply(
+                timeline,
+                new ChatTurnEndEvent());
+
+            var isError = terminal.Data.TryGetProperty("state", out var state) &&
+                string.Equals(
+                    state.GetString(),
+                    "error",
+                    StringComparison.OrdinalIgnoreCase);
+            return new(
+                runId,
+                isError,
+                BuildSnapshotLocked(context));
+        }
+    }
+
     internal ChatLocalEchoTransition ConsumeLocalEcho(
         ChatMessageInfo message,
         bool removeQueuedMessage,
@@ -1642,11 +1716,14 @@ internal sealed class ChatConversationState
         ChatMessageInfo message,
         string assistantText,
         ChatProjectionContext context,
-        ChatAssistantContentPresentation? assistantContent = null)
+        ChatAssistantContentPresentation? assistantContent = null,
+        bool isTerminal = false)
     {
         var threadId = message.SessionKey!;
         lock (_gate)
         {
+            _lifecycle.TryGetActiveRun(threadId, out var activeRunId);
+            var responseId = message.SpeechRendition?.Identity.ResponseId ?? activeRunId;
             // A frame carrying only structured/legacy media directives (no
             // plain text) has nothing for the identified-duplicate/self-echo
             // classifier to compare against, and it never carries a gateway
@@ -1663,7 +1740,9 @@ internal sealed class ChatConversationState
                     threadId,
                     assistantText,
                     message.OpenClawId,
-                    message.OpenClawSeq);
+                    message.OpenClawSeq,
+                    responseId,
+                    isTerminal && string.Equals(activeRunId, responseId, StringComparison.Ordinal));
             ChatDataSnapshot? promotionSnapshot = null;
             if (disposition == AssistantQueueFrameDisposition.Render &&
                 _queue.IsLocallyInitiated(threadId) &&
@@ -1680,7 +1759,9 @@ internal sealed class ChatConversationState
                 message.Ts,
                 message.OpenClawId,
                 message.OpenClawSeq,
-                assistantContent: assistantContent);
+                assistantContent: assistantContent,
+                speechRendition: message.SpeechRendition,
+                responseId: responseId);
             var hasUsage = message.InputTokens is not null ||
                            message.OutputTokens is not null ||
                            message.ResponseTokens is not null ||
@@ -1699,7 +1780,6 @@ internal sealed class ChatConversationState
                         : metadata.ContextTokens,
                 };
             }
-            _lifecycle.TryGetActiveRun(threadId, out var activeRunId);
             return new(disposition, promotionSnapshot, metadata, activeRunId);
         }
     }
@@ -1770,7 +1850,8 @@ internal sealed class ChatConversationState
                         ChatContentFormatting.TruncateChatEvent(mapped),
                         BuildLiveMetaLocked(
                             threadId,
-                            evt.Ts > 0 ? (long)evt.Ts : 0));
+                            evt.Ts > 0 ? (long)evt.Ts : 0,
+                            responseId: string.IsNullOrEmpty(evt.RunId) ? null : evt.RunId));
                     toolMetadata = BuildToolMetadataWriteLocked(
                         threadId,
                         mapped,
@@ -2396,8 +2477,17 @@ internal sealed class ChatConversationState
         string threadId,
         string assistantText,
         string? gatewayMessageId,
-        int? openClawSeq)
+        int? openClawSeq,
+        string? responseId,
+        bool reconcileCompletedResponse)
     {
+        if (!string.IsNullOrEmpty(responseId) &&
+            HasCompletedAssistantResponseLocked(threadId, responseId))
+        {
+            return reconcileCompletedResponse
+                ? AssistantQueueFrameDisposition.Reconcile
+                : AssistantQueueFrameDisposition.Drop;
+        }
         if ((!string.IsNullOrEmpty(gatewayMessageId) || openClawSeq is not null) &&
             IsIdentifiedCompletedAssistantDuplicateLocked(
                 threadId,
@@ -2452,6 +2542,28 @@ internal sealed class ChatConversationState
                 : AssistantQueueFrameDisposition.Render;
         }
         return AssistantQueueFrameDisposition.Render;
+    }
+
+    private bool HasCompletedAssistantResponseLocked(string threadId, string responseId)
+    {
+        if (!_timelines.TryGetValue(threadId, out var timeline) ||
+            !_entryMeta.TryGetValue(threadId, out var metadata))
+        {
+            return false;
+        }
+        for (var i = timeline.Entries.Count - 1; i >= 0; i--)
+        {
+            var entry = timeline.Entries[i];
+            if (entry.Kind == ChatTimelineItemKind.Assistant &&
+                !entry.IsStreaming &&
+                metadata.TryGetValue(entry.Id, out var existing) &&
+                existing.SpeechRendition is not null &&
+                string.Equals(existing.ResponseId, responseId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private bool IsIdentitylessAssistantRetransmitAcrossLocalUserBoundaryLocked(
@@ -2621,7 +2733,9 @@ internal sealed class ChatConversationState
         long? compactionTokensBefore = null,
         long? compactionTokensAfter = null,
         IReadOnlyList<ChatAttachmentPresentation>? attachments = null,
-        ChatAssistantContentPresentation? assistantContent = null)
+        ChatAssistantContentPresentation? assistantContent = null,
+        OpenClaw.Shared.Speech.SpeechRendition? speechRendition = null,
+        string? responseId = null)
     {
         var timestamp = tsMs is { } value && value > 0
             ? DateTimeOffset.FromUnixTimeMilliseconds(value).ToLocalTime()
@@ -2637,7 +2751,9 @@ internal sealed class ChatConversationState
             IsLocalQueuedSend: isLocalQueuedSend,
             LocalQueuedMessageId: localQueuedMessageId,
             Attachments: attachments,
-            AssistantContent: assistantContent);
+            AssistantContent: assistantContent,
+            SpeechRendition: speechRendition,
+            ResponseId: responseId);
     }
 
     private ChatOpenedLifecycleTransition? AddResetAcceptedRunIdLocked(

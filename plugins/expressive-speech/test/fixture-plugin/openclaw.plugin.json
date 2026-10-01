@@ -1,0 +1,7 @@
+{
+  "id": "expressive-speech-probe",
+  "name": "Expressive speech isolated host probe",
+  "activation": { "onStartup": true },
+  "providerAuthAliases": { "probe-openai": { "provider": "openai", "baseUrls": ["https://chatgpt.com/backend-api/codex"] } },
+  "configSchema": { "type": "object", "additionalProperties": false }
+}

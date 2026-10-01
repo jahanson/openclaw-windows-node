@@ -32,6 +32,7 @@ public sealed partial class ChatWindow : WindowEx
     private string? _chatUrl;
     private MountedReactorChat? _reactorHost;
     private IChatDataProvider? _mountedProvider;
+    private string? _speechSessionKey;
     private bool _webViewInitialized;
     private bool _webViewMode;
     private bool _shownNearTray;
@@ -79,6 +80,11 @@ public sealed partial class ChatWindow : WindowEx
         _token = token;
         _chatUrl = ChatSurfaceResolver.BuildChatUrl(gatewayUrl, token);
         InitializeComponent();
+        ChatHost.GotFocus += (_, _) =>
+        {
+            if (_shownNearTray && !_webViewMode && Application.Current is App speechApp)
+                speechApp.UpdateChatSpeechSurface(this, _speechSessionKey, true, true);
+        };
         Title = AppIdentity.DecorateWindowTitle("OpenClaw Chat");
 
         this.SetWindowSize(DefaultChatWidth, DefaultChatHeight);
@@ -458,7 +464,16 @@ public sealed partial class ChatWindow : WindowEx
             onReadAloud: readAloud,
             onStopSpeaking: () => appInstance?.StopChatSpeaking(),
             onOpenCheckpoints: OpenSessionCheckpoints,
-            isCompact: true);
+            isCompact: true,
+            onSpeechAction: ChatSpeechActionPresenter.HandleAsync,
+            onSpeechSessionSelected: key =>
+            {
+                _speechSessionKey = key;
+                appInstance?.UpdateChatSpeechSurface(this, key, _shownNearTray && !_webViewMode, true);
+            },
+            speechState: appInstance?.ChatSpeechState,
+            isDialogEnabled: () => appInstance?.Settings.ChatSpeechProvider == "elevenlabs-dialog",
+            speechMode: () => appInstance?.Settings.ChatSpeechMode ?? "auto");
         _mountedProvider = provider;
         UpdateNativeChatSurfaceActive();
     }
@@ -497,7 +512,10 @@ public sealed partial class ChatWindow : WindowEx
     private void UpdateNativeChatSurfaceActive()
     {
         if (App.Current is App app)
+        {
             app.SetTrayNativeChatSurfaceActive(_shownNearTray && !_webViewMode && _reactorHost is not null);
+            app.UpdateChatSpeechSurface(this, _speechSessionKey, _shownNearTray && !_webViewMode && _reactorHost is not null);
+        }
     }
 
     private void OnAttachClicked()

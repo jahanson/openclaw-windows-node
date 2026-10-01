@@ -64,6 +64,7 @@ public sealed partial class VoiceSettingsPage : Page
         // TextBlock's Text, never the Button's Content).
         PiperPreviewLabel.Text = L("VoiceSettingsPage_PiperPreviewButtonContent");
         PreviewVoiceLabel.Text = L("VoiceSettingsPage_PreviewVoiceButtonContent");
+        DialogPreviewLabel.Text = L("VoiceSettingsPage_DialogPreviewButtonContent");
         LoadSettings();
     }
 
@@ -114,6 +115,7 @@ public sealed partial class VoiceSettingsPage : Page
             TtsResponseToggle.IsOn = settings.VoiceTtsEnabled;
             AudioFeedbackToggle.IsOn = settings.VoiceAudioFeedback;
 
+            LoadChatSpeechSettings(settings);
             LoadTtsSettings(settings);
             UpdateModelStatus();
             UpdateCapabilityState();
@@ -591,6 +593,178 @@ public sealed partial class VoiceSettingsPage : Page
         UpdateCapabilityState();
     }
 
+    private void LoadChatSpeechSettings(SettingsManager settings)
+    {
+        SelectComboBoxTag(ChatSpeechProviderCombo, settings.ChatSpeechProvider, fallbackIndex: 0);
+        SelectComboBoxTag(ChatSpeechModeCombo, settings.ChatSpeechMode, fallbackIndex: 0);
+        DialogApiKeyBox.Password = settings.TtsElevenLabsApiKey;
+        DialogVoiceIdBox.Text = settings.TtsElevenLabsVoiceId;
+        UpdateChatSpeechState();
+    }
+
+    private static void SelectComboBoxTag(ComboBox comboBox, string value, int fallbackIndex)
+    {
+        for (int i = 0; i < comboBox.Items.Count; i++)
+        {
+            if (comboBox.Items[i] is ComboBoxItem item &&
+                string.Equals(item.Tag?.ToString(), value, StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedIndex = i;
+                return;
+            }
+        }
+        comboBox.SelectedIndex = fallbackIndex;
+    }
+
+    private void UpdateChatSpeechState()
+    {
+        var settings = CurrentApp.Settings;
+        var isDialog = string.Equals(
+            (ChatSpeechProviderCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString(),
+            SettingsManager.ChatSpeechProviderElevenLabsDialog,
+            StringComparison.OrdinalIgnoreCase);
+        ChatSpeechDialogPanel.Visibility = isDialog ? Visibility.Visible : Visibility.Collapsed;
+        if (!isDialog)
+        {
+            ChatSpeechStatusText.Text = L("VoiceSettingsPage_ChatSpeechStatusExisting");
+            return;
+        }
+
+        var hasKey = !string.IsNullOrWhiteSpace(settings.TtsElevenLabsApiKey);
+        var hasVoice = !string.IsNullOrWhiteSpace(settings.TtsElevenLabsVoiceId);
+        DialogPreviewButton.IsEnabled = hasKey && hasVoice;
+        ChatSpeechStatusText.Text = !hasKey
+            ? L("VoiceSettingsPage_ChatSpeechStatusNeedsKey")
+            : !hasVoice
+                ? L("VoiceSettingsPage_ChatSpeechStatusNeedsVoice")
+                : L("VoiceSettingsPage_ChatSpeechStatusConfigured");
+    }
+
+    private void OnChatSpeechProviderChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (ChatSpeechProviderCombo.SelectedItem is ComboBoxItem item && item.Tag is string provider)
+        {
+            try { CurrentApp.Settings.SaveChatSpeechProvider(provider); }
+            catch (Exception ex)
+            {
+                Logger.Error($"Saving the chat speech provider failed: {ex.Message}");
+                ReloadChatSpeechSettings();
+                return;
+            }
+        }
+        UpdateChatSpeechState();
+    }
+
+    private void OnChatSpeechModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (ChatSpeechModeCombo.SelectedItem is ComboBoxItem item && item.Tag is string mode)
+        {
+            try { CurrentApp.Settings.SaveChatSpeechMode(mode); }
+            catch (Exception ex)
+            {
+                Logger.Error($"Saving the chat speech mode failed: {ex.Message}");
+                ReloadChatSpeechSettings();
+                return;
+            }
+        }
+        UpdateChatSpeechState();
+    }
+
+    private void ReloadChatSpeechSettings()
+    {
+        var wasSuppressed = _suppressEvents;
+        _suppressEvents = true;
+        try { LoadChatSpeechSettings(CurrentApp.Settings); }
+        finally { _suppressEvents = wasSuppressed; }
+    }
+
+    private void OnDialogKeyChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        CurrentApp.Settings.TtsElevenLabsApiKey = DialogApiKeyBox.Password;
+        CurrentApp.Settings.Save();
+        SynchronizeElevenLabsFields(() => ElevenLabsApiKeyBox.Password = DialogApiKeyBox.Password);
+        UpdateChatSpeechState();
+    }
+
+    private void OnDialogVoiceIdChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        CurrentApp.Settings.TtsElevenLabsVoiceId = DialogVoiceIdBox.Text;
+        CurrentApp.Settings.Save();
+        SynchronizeElevenLabsFields(() => ElevenLabsVoiceIdBox.Text = DialogVoiceIdBox.Text);
+        UpdateChatSpeechState();
+    }
+
+    private void SynchronizeElevenLabsFields(Action update)
+    {
+        var wasSuppressed = _suppressEvents;
+        _suppressEvents = true;
+        try { update(); }
+        finally { _suppressEvents = wasSuppressed; }
+    }
+
+    private void OnDialogPreviewClick(object sender, RoutedEventArgs e) =>
+        AsyncEventHandlerGuard.Run(
+            OnDialogPreviewClickAsync,
+            new AppLogger(),
+            nameof(OnDialogPreviewClick));
+
+    private async Task OnDialogPreviewClickAsync()
+    {
+        var settings = CurrentApp.Settings;
+        if (string.IsNullOrWhiteSpace(settings.TtsElevenLabsApiKey) ||
+            string.IsNullOrWhiteSpace(settings.TtsElevenLabsVoiceId))
+            return;
+
+        DialogPreviewButton.IsEnabled = false;
+        DialogPreviewLabel.Text = L("VoiceSettingsPage_DialogPreviewGenerating");
+        ChatSpeechStatusText.Text = L("VoiceSettingsPage_DialogPreviewGeneratingStatus");
+        try
+        {
+            using var lease = await SpeechPlaybackArbiter.Shared.AcquireAsync(
+                SpeechCaller.Preview, interrupt: true, CancellationToken.None);
+            using var client = new ElevenLabsDialogClient();
+            var audio = await client.GeneratePreparedAsync(new ElevenLabsDialogRequest
+            {
+                ApiKey = settings.TtsElevenLabsApiKey,
+                VoiceId = settings.TtsElevenLabsVoiceId,
+                CueFormat = "elevenlabs-audio-tags"
+            }, L("VoiceSettingsPage_DialogPreviewText"), lease.Token);
+            var playback = new WasapiPcmPlayback();
+            await playback.PlayAsync(audio.Format,
+                async (write, token) => await write(audio.AudioBytes, token).ConfigureAwait(false),
+                lease.Token);
+        }
+        catch (DialogProviderException ex)
+        {
+            Logger.Warn($"ElevenLabs Dialog preview failed ({ex.Reason}): {ex.Message}");
+            DialogPreviewIcon.Glyph = "\uEA39";
+            ChatSpeechStatusText.Text = ex.Message;
+            await Task.Delay(3000);
+        }
+        catch (SpeechPlaybackBusyException)
+        {
+            ChatSpeechStatusText.Text = L("VoiceSettingsPage_DialogPreviewBusy");
+            await Task.Delay(3000);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"ElevenLabs Dialog preview failed: {ex}");
+            DialogPreviewIcon.Glyph = "\uEA39";
+            ChatSpeechStatusText.Text = L("VoiceSettingsPage_DialogPreviewFailed");
+            await Task.Delay(3000);
+        }
+        finally
+        {
+            DialogPreviewIcon.Glyph = "\uE768";
+            DialogPreviewLabel.Text = L("VoiceSettingsPage_DialogPreviewButtonContent");
+            UpdateChatSpeechState();
+        }
+    }
+
     private void PopulatePiperVoices(SettingsManager settings)
     {
         PiperVoiceCombo.Items.Clear();
@@ -778,7 +952,7 @@ public sealed partial class VoiceSettingsPage : Page
                 Provider = OpenClaw.Shared.Capabilities.TtsCapability.PiperProvider,
                 VoiceId = voiceId,
                 Interrupt = true
-            });
+            }, SpeechCaller.Preview);
         }
         catch (Exception ex)
         {
@@ -897,7 +1071,7 @@ public sealed partial class VoiceSettingsPage : Page
                     Provider = CurrentApp.Settings.TtsProvider,
                     VoiceId = WindowsVoiceCombo.SelectedItem is ComboBoxItem item ? item.Tag?.ToString() : null,
                     Interrupt = true
-                });
+                }, SpeechCaller.Preview);
             }
             finally
             {
@@ -926,6 +1100,8 @@ public sealed partial class VoiceSettingsPage : Page
         if (_suppressEvents || CurrentApp.Settings == null) return;
         CurrentApp.Settings.TtsElevenLabsApiKey = ElevenLabsApiKeyBox.Password;
         CurrentApp.Settings.Save();
+        SynchronizeElevenLabsFields(() => DialogApiKeyBox.Password = ElevenLabsApiKeyBox.Password);
+        UpdateChatSpeechState();
     }
 
     private void OnElevenLabsVoiceIdChanged(object sender, TextChangedEventArgs e)
@@ -933,6 +1109,8 @@ public sealed partial class VoiceSettingsPage : Page
         if (_suppressEvents || CurrentApp.Settings == null) return;
         CurrentApp.Settings.TtsElevenLabsVoiceId = ElevenLabsVoiceIdBox.Text;
         CurrentApp.Settings.Save();
+        SynchronizeElevenLabsFields(() => DialogVoiceIdBox.Text = ElevenLabsVoiceIdBox.Text);
+        UpdateChatSpeechState();
     }
 
     private void OnElevenLabsModelChanged(object sender, TextChangedEventArgs e)

@@ -84,14 +84,14 @@ public sealed class ReactorChatTimeline : Component<ReactorChatTimelineProps>
                 return;
             }
 
-            if (props.Timeline.OnReadAloud is not { } readAloud)
+            if (props.Timeline.OnReadAloud is null)
                 return;
 
             var operation = ++speechOperation.Current;
             setSpeakingEntryId(entry.Id);
             try
             {
-                await readAloud(StripMarkdownForSpeech(text));
+                await props.Timeline.OnReadAloud!(StripMarkdownForSpeech(text));
             }
             catch (Exception ex)
             {
@@ -623,7 +623,13 @@ public sealed class ReactorChatTimeline : Component<ReactorChatTimelineProps>
         var identity = string.IsNullOrWhiteSpace(metadataText) ? sender : $"{sender} · {metadataText}";
         children.Add(CopyAction(entry.Text, setEntryHovered, entry.Id, row.Key, row.Props.TryCopyText));
 
-        if (row.Props.Timeline.OnReadAloud is not null || row.Props.Timeline.OnStopSpeaking is not null)
+        if (row.Props.Timeline.OnSpeechAction is { } speechAction)
+        {
+            children.Add(Component<ChatDialogSpeechActions, ChatDialogSpeechActionsProps>(new(
+                CreateSpeechAction(row.Props.Timeline, entry, ChatSpeechActionKind.Replay),
+                speechAction, row.Props.Timeline.OnStopSpeaking)));
+        }
+        else if (row.Props.Timeline.OnReadAloud is not null || row.Props.Timeline.OnStopSpeaking is not null)
         {
             var label = isSpeaking
                 ? LocalizedOrDefault("Chat_Assistant_Action_Stop", "Stop")
@@ -652,6 +658,15 @@ public sealed class ReactorChatTimeline : Component<ReactorChatTimelineProps>
                     .HAlign(HorizontalAlignment.Left).Grid(column: 1))
             .Margin(0, 4, 0, 0)
             .HAlign(HorizontalAlignment.Stretch);
+    }
+
+    private static ChatSpeechAction CreateSpeechAction(ChatTimelinePresentationContext timeline,
+        ChatTimelineItem entry, ChatSpeechActionKind kind)
+    {
+        ChatEntryMetadata? metadata = null;
+        timeline.EntryMetadata?.TryGetValue(entry.Id, out metadata);
+        return new(timeline.SessionId ?? string.Empty, entry.Id, entry.Text ?? string.Empty,
+            metadata?.SpeechRendition, kind);
     }
 
     private static Element CopyAction(
