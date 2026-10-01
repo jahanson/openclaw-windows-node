@@ -407,4 +407,3 @@ try {
   await new Promise((resolveClose) => model.close(resolveClose));
   console.log(`Synthetic host evidence: ${directory}`);
 }
-
